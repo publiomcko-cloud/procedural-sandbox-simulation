@@ -45,6 +45,16 @@ var _dormant_scope_order: Array[String] = []
 # indexed effect footprints can touch that chunk. This removes the former
 # O(resident scopes) scan from every chunk snapshot.
 var _scope_ids_by_chunk: Dictionary = {}
+# DM14: scope authority is removed synchronously, but cleanup of inactive
+# reverse-index memberships may be spread over frames. Frame queries always
+# check _scope_indexes.has(scope_id) before trusting a route.
+const DM14_MAX_PENDING_CLEANUPS := 64
+var _dm14_lazy_cleanup_enabled := false
+var _dm14_route_cleanup: Array[Dictionary] = []
+var _dm14_cleanup_keys_total := 0
+var _dm14_cleanup_flush_on_revisit := 0
+var _dm14_cleanup_fallback_sync := 0
+var _dm14_pending_peak := 0
 var _performance := {
 	"scope_load_count": 0,
 	"scope_release_count": 0,
@@ -76,6 +86,12 @@ func initialize(
 	initialized = false
 	initialization_error = ""
 	_perf_trace_enabled = PerformanceTrace.is_enabled()
+	_dm14_lazy_cleanup_enabled = OS.get_environment("SANDBOX_DM14_LAZY_ROUTES") == "1"
+	_dm14_route_cleanup.clear()
+	_dm14_cleanup_keys_total = 0
+	_dm14_cleanup_flush_on_revisit = 0
+	_dm14_cleanup_fallback_sync = 0
+	_dm14_pending_peak = 0
 	world_id = world_identifier
 	world_seed = seed_value
 	generator_version = generator
@@ -222,7 +238,22 @@ func release_scope(
 	var scope_id := Contract.scope_id_for_region(region_key)
 	if not _scopes.has(scope_id):
 		return
-	_remove_scope_routes(scope_id)
+	if _dm14_lazy_cleanup_enabled \
+	and _dm14_route_cleanup.size() < DM14_MAX_PENDING_CLEANUPS:
+		# The visible source scope and index are still immediately erased
+		# below. Stale membership strings cannot expose an inactive source.
+		_dm14_route_cleanup.append({
+			"scope_id": scope_id,
+			"index": _scope_indexes[scope_id],
+			"keys": Array[String](),
+			"cursor": 0,
+			"prepared": false,
+		})
+		_dm14_pending_peak = maxi(_dm14_pending_peak, _dm14_route_cleanup.size())
+	else:
+		if _dm14_lazy_cleanup_enabled:
+			_dm14_cleanup_fallback_sync += 1
+		_remove_scope_routes(scope_id)
 	var snapshot: Dictionary = _scopes[scope_id]
 	var index: RefCounted = _scope_indexes[scope_id]
 	var generation := int(_storage_generations.get(scope_id, 0))
@@ -958,7 +989,9 @@ func snapshot_for_chunk(
 		"chunk_coordinate": chunk_coordinate,
 		"local_frames": frames,
 		"effect_count": frames.size(),
-		"routed_scope_count": (
+		"routed_scope_count": _dm14_count_current_routes(
+			Grid.stable_id(region_key, chunk_coordinate)
+		) if _dm14_lazy_cleanup_enabled else (
 			_scope_ids_by_chunk.get(
 				Grid.stable_id(region_key, chunk_coordinate), []
 			) as Array
@@ -980,6 +1013,12 @@ func get_performance_snapshot() -> Dictionary:
 	var result := _performance.duplicate(true)
 	result["resident_scope_count"] = _scopes.size()
 	result["reverse_route_chunk_count"] = _scope_ids_by_chunk.size()
+	result["dm14_lazy_route_cleanup"] = _dm14_lazy_cleanup_enabled
+	result["dm14_cleanup_pending"] = _dm14_route_cleanup.size()
+	result["dm14_cleanup_peak_pending"] = _dm14_pending_peak
+	result["dm14_cleanup_keys_total"] = _dm14_cleanup_keys_total
+	result["dm14_cleanup_revisit_flushes"] = _dm14_cleanup_flush_on_revisit
+	result["dm14_cleanup_sync_fallbacks"] = _dm14_cleanup_fallback_sync
 	result["max_resident_scope_count"] = MAX_RESIDENT_SCOPES
 	result["dormant_scope_count"] = _dormant_scopes.size()
 	result["max_dormant_scope_count"] = MAX_DORMANT_SCOPES
@@ -1061,6 +1100,8 @@ func _remember_dormant_scope(
 
 
 func _install_scope_index(scope_id: String, index: RefCounted) -> void:
+	if _dm14_lazy_cleanup_enabled:
+		_dm14_flush_pending_for_scope(scope_id)
 	_remove_scope_routes(scope_id)
 	_scope_indexes[scope_id] = index
 	for chunk_id_value in index.get_all_indexed_chunk_ids():
@@ -1074,6 +1115,81 @@ func _install_scope_index(scope_id: String, index: RefCounted) -> void:
 		_performance["scope_route_install_count"]
 	) + 1
 
+
+## The only deferred operation is removal of already-inactive reverse
+## memberships. Source scope, authority, route index, and residency are
+## invalidated synchronously by release_scope (same as the original path).
+func process_route_cleanup_step(
+	max_chunk_keys: int = 24,
+	budget_usec: int = 1200
+) -> Dictionary:
+	if not initialized:
+		return {"ok": false, "reason": "projection_not_initialized"}
+	if not _dm14_lazy_cleanup_enabled or _dm14_route_cleanup.is_empty():
+		return {"ok": true, "cleaned": 0, "pending": _dm14_route_cleanup.size()}
+	var started_usec := Time.get_ticks_usec()
+	var cleaned := 0
+	while not _dm14_route_cleanup.is_empty() and cleaned < maxi(1, max_chunk_keys):
+		var row: Dictionary = _dm14_route_cleanup[0]
+		if not bool(row["prepared"]):
+			row["keys"] = (row["index"] as RefCounted).get_all_indexed_chunk_ids_unsorted()
+			row["prepared"] = true
+		var keys: Array[String] = row["keys"]
+		var cursor := int(row["cursor"])
+		while cursor < keys.size() and cleaned < maxi(1, max_chunk_keys):
+			_dm14_remove_inactive_route(String(row["scope_id"]), keys[cursor])
+			cursor += 1
+			cleaned += 1
+			if Time.get_ticks_usec() - started_usec >= maxi(1, budget_usec):
+				break
+		row["cursor"] = cursor
+		_dm14_cleanup_keys_total += cleaned
+		if cursor >= keys.size():
+			_dm14_route_cleanup.pop_front()
+		else:
+			_dm14_route_cleanup[0] = row
+		if Time.get_ticks_usec() - started_usec >= maxi(1, budget_usec):
+			break
+	return {
+		"ok": true,
+		"cleaned": cleaned,
+		"pending": _dm14_route_cleanup.size(),
+		"elapsed_usec": Time.get_ticks_usec() - started_usec,
+	}
+
+
+func _dm14_count_current_routes(chunk_id: String) -> int:
+	var count := 0
+	for id_value in (_scope_ids_by_chunk.get(chunk_id, []) as Array):
+		if _scope_indexes.has(String(id_value)):
+			count += 1
+	return count
+
+
+func _dm14_remove_inactive_route(scope_id: String, chunk_id: String) -> void:
+	var ids: Array = _scope_ids_by_chunk.get(chunk_id, [])
+	ids.erase(scope_id)
+	if ids.is_empty():
+		_scope_ids_by_chunk.erase(chunk_id)
+	else:
+		_scope_ids_by_chunk[chunk_id] = ids
+
+
+func _dm14_flush_pending_for_scope(scope_id: String) -> void:
+	if _dm14_route_cleanup.is_empty():
+		return
+	var remaining: Array[Dictionary] = []
+	for row in _dm14_route_cleanup:
+		if String(row["scope_id"]) != scope_id:
+			remaining.append(row)
+			continue
+		if not bool(row["prepared"]):
+			row["keys"] = (row["index"] as RefCounted).get_all_indexed_chunk_ids_unsorted()
+		var keys: Array[String] = row["keys"]
+		for i in range(int(row["cursor"]), keys.size()):
+			_dm14_remove_inactive_route(scope_id, keys[i])
+		_dm14_cleanup_flush_on_revisit += 1
+	_dm14_route_cleanup = remaining
 
 func _remove_scope_routes(scope_id: String) -> void:
 	if not _scope_indexes.has(scope_id):
