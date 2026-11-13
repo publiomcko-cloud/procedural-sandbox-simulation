@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('idle', 'straight-18', 'straight-54', 'outback-18', 'outback-54')]
+    [ValidateSet('idle', 'straight-2', 'straight-18', 'straight-54', 'outback-18', 'outback-54')]
     [string[]]$Routes = @('straight-18', 'straight-54'),
     [ValidateSet('baseline', 'adaptive', 'adaptive-skip', 'adaptive-skip-lookahead', 'adaptive-skip-coarse', 'adaptive-skip-progressive')]
     [string[]]$Profiles = @('adaptive-skip', 'adaptive-skip-coarse', 'adaptive-skip-coarse', 'adaptive-skip'),
@@ -152,7 +152,7 @@ foreach ($route in $Routes) {
             [int]$receipt.seed -ne 424242 -or [int]$receipt.frames -ne $Frames) {
             throw "Non-matching source/route/profile/seed/frames: $runId"
         }
-        $expectedDistance = if ($route -eq 'idle') { 0.0 } elseif ($route.EndsWith('54')) { 54.0 * $Frames / 60.0 } else { 18.0 * $Frames / 60.0 }
+        $expectedDistance = if ($route -eq 'idle') { 0.0 } elseif ($route -eq 'straight-2') { 2.0 * $Frames / 60.0 } elseif ($route.EndsWith('54')) { 54.0 * $Frames / 60.0 } else { 18.0 * $Frames / 60.0 }
         if ([Math]::Abs([double]$receipt.distance_m - $expectedDistance) -gt 0.005) {
             throw "Route geometry mismatch: $runId, distance=$($receipt.distance_m), expected=$expectedDistance"
         }
@@ -170,6 +170,7 @@ foreach ($route in $Routes) {
         $workerRunMs = @()
         $uploadMs = @()
         $snapshotMs = @()
+        $dm10SchedulerSamples = @()
         $dm9VisualWorkerMs = @()
         $dm9VisualQueueMs = @()
         $dm9VisualFieldMs = @()
@@ -194,6 +195,7 @@ foreach ($route in $Routes) {
                 }
                 'terrain_stream_budget_window' { $windows += $event }
                 'dm8_radial_gap_sample' { $radialSamples += $event }
+                'dm10_visual_qos_sample' { $dm10SchedulerSamples += $event }
                 'dm9_visual_shell_complete' {
                     $dm9VisualWorkerMs += ([double]$event.worker_run_usec / 1000.0)
                     $dm9VisualQueueMs += ([double]$event.worker_queue_usec / 1000.0)
@@ -311,6 +313,11 @@ foreach ($route in $Routes) {
             dm9_enabled = ($env:SANDBOX_DM9_PREFETCH -eq '1')
             dm9_lifecycle = $dm9ByAction
             dm9_visual_worker_limit = $(if ($env:SANDBOX_DM9_VISUAL_WORKERS) { [int]$env:SANDBOX_DM9_VISUAL_WORKERS } else { 1 })
+            dm10_mode = $env:SANDBOX_DM10_VISUAL_QOS
+            dm10_scheduler_samples = $dm10SchedulerSamples.Count
+            dm10_scheduler_moving_canonical_pressure_samples = @($dm10SchedulerSamples | Where-Object { $_.state -eq 'directional' -and $_.canonical_loading -gt 0 }).Count
+            dm10_scheduler_blocked_samples = @($dm10SchedulerSamples | Where-Object { -not [bool]$_.may_submit }).Count
+            dm10_scheduler_last_reason = $(if ($dm10SchedulerSamples.Count -gt 0) { [string]$dm10SchedulerSamples[-1].reason } else { '' })
             dm9_visual_shell_complete_count = $dm9VisualWorkerMs.Count
             dm9_fast_b4 = ($env:SANDBOX_DM9_FAST_B4 -eq '1')
             dm9_full_high_elapsed_ms = $(if ($dm9SessionStartUsec -ge 0 -and $dm9FullHighUsec -ge $dm9SessionStartUsec) { [Math]::Round(($dm9FullHighUsec - $dm9SessionStartUsec) / 1000.0, 3) } else { $null })
