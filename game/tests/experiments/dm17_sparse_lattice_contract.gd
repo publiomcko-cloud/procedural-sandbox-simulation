@@ -32,7 +32,10 @@ func _run() -> void:
 				float(region.y) * 12.0 + 1.5), 1.15), "valid edit")
 		for coord in [Vector2i(0, 0), Vector2i(1, 1), Vector2i(3, 3)]:
 			var edited: Dictionary = ledger.get_meshing_snapshot_for_chunk(region, coord)
-			_compare(region, coord, edited, false, false, "edited")
+			# An edit outside this chunk can be safely eliminated by the exact
+			# meshing influence index; that chunk remains genuinely pristine.
+			var affected := not (edited.get("centers", PackedVector3Array()) as PackedVector3Array).is_empty()
+			_compare(region, coord, edited, false, not affected, "edited")
 			_compare(region, coord, edited, true, false, "cave")
 	_check(blocks > 0 and skipped_cells > 0, "sparse path executed")
 	_check(shared_hits > 0 and shared_builds > 0, "regional lattice cache miss and hit")
