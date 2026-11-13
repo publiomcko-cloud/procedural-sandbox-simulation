@@ -8,6 +8,7 @@ class_name EnvironmentVisualPresentation
 const EnvironmentStore := preload("res://scripts/simulation/environment_state_store.gd")
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
 const OceanVisual := preload("res://scripts/simulation/environment_ocean_visual_domain.gd")
+const DM13WaterJob := preload("res://scripts/simulation/dm13_water_geometry_job.gd")
 
 const MAX_CELLS_PER_REGION := 48
 const SHORELINE_SUBDIVISIONS := 2
@@ -54,10 +55,26 @@ var _unchanged_visual_skips_total := 0
 var _peak_rebuild_usec := 0
 var _trace_enabled := false
 var _water_debug_mode := "normal"
+var _dm13_water_workers := false
+var _dm13_water_jobs: Dictionary = {}
+var _dm13_water_pending_by_region: Dictionary = {}
+var _dm13_epoch := 0
+var _dm13_submitted_this_frame := 0
+var _dm13_submitted_total := 0
+var _dm13_completed_total := 0
+var _dm13_stale_total := 0
+var _dm13_peak_worker_usec := 0
+var _dm13_peak_publish_usec := 0
+const DM13_MAX_IN_FLIGHT := 2
+const DM13_MAX_SUBMISSIONS_PER_FRAME := 1
+const DM13_MAX_PUBLICATIONS_PER_FRAME := 1
 
 
 func _ready() -> void:
 	_trace_enabled = PerformanceTrace.is_enabled()
+	_dm13_water_workers = OS.get_environment("SANDBOX_DM13_WATER_WORKERS") == "1"
+	if _dm13_water_workers:
+		print("DM13_WATER_WORKERS: enabled=1 immutable_cpu=1 revision_gated=1 max_in_flight=2 no_authority_mutation=1")
 	var water_material := StandardMaterial3D.new()
 	water_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	water_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -89,6 +106,7 @@ func _ready() -> void:
 
 
 func configure_environment(runtime: Node, climate_profile: Dictionary = {}, profile_sha256: String = "") -> void:
+	_dm13_epoch += 1
 	_runtime = runtime
 	_climate_profile = climate_profile.duplicate(true)
 	_profile_sha256 = profile_sha256
@@ -111,6 +129,7 @@ func set_water_debug_mode(mode: String) -> bool:
 	if mode not in ["normal", "off", "ocean-only", "sources"]:
 		return false
 	_water_debug_mode = mode
+	_dm13_epoch += 1
 	for id in _region_ids:
 		var row: Dictionary = _regions[id]
 		row["token"] = ""
@@ -176,6 +195,9 @@ func unregister_region(region_key: Vector2i) -> void:
 func process_visual_frame(delta: float, camera_position: Vector3, focus_region: Vector2i) -> void:
 	if _runtime == null or not is_instance_valid(_runtime):
 		return
+	if _dm13_water_workers:
+		_dm13_submitted_this_frame = 0
+		_dm13_publish_ready()
 	if _water_debug_mode != "off":
 		_poll_resident_regions()
 	_update_rain(delta, camera_position, focus_region)
@@ -196,6 +218,13 @@ func get_visual_metrics() -> Dictionary:
 		"rain_visible": _rain_node != null and _rain_node.visible,
 		"visible_shoreline_vertices": _count_visible_shoreline_vertices(),
 		"water_debug_mode": _water_debug_mode,
+		"dm13_water_workers": _dm13_water_workers,
+		"dm13_jobs_in_flight": _dm13_water_jobs.size(),
+		"dm13_jobs_submitted_total": _dm13_submitted_total,
+		"dm13_jobs_completed_total": _dm13_completed_total,
+		"dm13_jobs_stale_total": _dm13_stale_total,
+		"dm13_peak_worker_usec": _dm13_peak_worker_usec,
+		"dm13_peak_publish_usec": _dm13_peak_publish_usec,
 		"visible_coastal_halo_cells": _sum_visible_region_metric("last_halo_cells"),
 		"visible_refined_coast_quads": _sum_visible_region_metric("last_refined_coast_quads"),
 		"visible_ocean_sdf_tiles": _sum_visible_region_metric("last_ocean_sdf_tiles"),
@@ -892,6 +921,13 @@ func _poll_resident_regions() -> void:
 			_begin_pending_visual_refresh(id, row, "missing_or_stale_shoreline_samples")
 			row["token"] = ""
 			_water_wait(id, row, "missing_or_stale_shoreline_samples")
+			continue
+		if _dm13_water_workers:
+			if not _dm13_water_pending_by_region.has(id) \
+			and _dm13_water_jobs.size() < DM13_MAX_IN_FLIGHT \
+			and _dm13_submitted_this_frame < DM13_MAX_SUBMISSIONS_PER_FRAME:
+				_dm13_queue_plan(id, row, environment, surface, token,
+					signature, neighbor_anchors, neighbor_signature, hydrology_enabled)
 			continue
 		var started := Time.get_ticks_usec()
 		var plan := derive_shoreline_geometry(
