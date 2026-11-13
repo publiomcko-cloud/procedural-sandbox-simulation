@@ -32,6 +32,12 @@ var _chunk_mode := false
 var _chunk_coordinate := Vector2i.ZERO
 var _chunk_offset := Vector3i.ZERO
 var last_generation_sample_count := 0
+## Passive timing of isolated B4 pristine visual hotspot stages.
+var last_pristine_precompute_usec := 0
+var last_pristine_lattice_usec := 0
+var last_pristine_rebuild_usec := 0
+var last_pristine_uniform_cells := 0
+
 
 
 func generate(seed_value: int, region_value: Vector2i, step_value: float) -> bool:
@@ -43,6 +49,10 @@ func generate(seed_value: int, region_value: Vector2i, step_value: float) -> boo
 	_chunk_mode = false
 	_chunk_offset = Vector3i.ZERO
 	last_generation_sample_count = 0
+	last_pristine_precompute_usec = 0
+	last_pristine_lattice_usec = 0
+	last_pristine_rebuild_usec = 0
+	last_pristine_uniform_cells = 0
 	dims = Vector3i(
 		roundi((Grid.MAX_BOUND.x - Grid.MIN_BOUND.x) / step),
 		roundi((Grid.MAX_BOUND.y - Grid.MIN_BOUND.y) / step),
@@ -53,6 +63,7 @@ func generate(seed_value: int, region_value: Vector2i, step_value: float) -> boo
 	nodes.resize(node_dims.x * node_dims.y * node_dims.z)
 	cell_active.resize(cell_dims.x * cell_dims.y * cell_dims.z)
 	cell_vertices.resize(cell_active.size())
+	var lattice_started := Time.get_ticks_usec()
 	for y in range(-1, dims.y + 2):
 		for z in range(-1, dims.z + 2):
 			for x in range(-1, dims.x + 2):
@@ -60,11 +71,115 @@ func generate(seed_value: int, region_value: Vector2i, step_value: float) -> boo
 					Field.sample_density(seed, region_key, _point(x, y, z)) * SCALE
 				)
 				last_generation_sample_count += 1
+	last_pristine_lattice_usec = Time.get_ticks_usec() - lattice_started
+	var rebuild_started := Time.get_ticks_usec()
 	for y in range(-1, dims.y + 1):
 		for z in range(-1, dims.z + 1):
 			for x in range(-1, dims.x + 1):
 				_rebuild_cell(x, y, z)
+	last_pristine_rebuild_usec = Time.get_ticks_usec() - rebuild_started
 	return true
+
+
+
+## Experimental DM9 fast path for immutable B4 visual-only regions.
+## Do not use for edited/authoritative chunks: generate_chunk() intentionally
+## retains the complete brush-snapshot oracle and cave section semantics.
+## SDF terms that depend only on X/Z are reused across every Y sample,
+## while all Q8.8 rounding and mixed-cell vertex construction stay identical.
+func generate_pristine_fast(seed_value: int, region_value: Vector2i, step_value: float) -> bool:
+	if step_value != 0.5:
+		return false
+	step = step_value
+	seed = seed_value
+	region_key = region_value
+	_chunk_mode = false
+	_chunk_offset = Vector3i.ZERO
+	last_generation_sample_count = 0
+	last_pristine_precompute_usec = 0
+	last_pristine_lattice_usec = 0
+	last_pristine_rebuild_usec = 0
+	last_pristine_uniform_cells = 0
+	dims = Vector3i(
+		roundi((Grid.MAX_BOUND.x - Grid.MIN_BOUND.x) / step),
+		roundi((Grid.MAX_BOUND.y - Grid.MIN_BOUND.y) / step),
+		roundi((Grid.MAX_BOUND.z - Grid.MIN_BOUND.z) / step)
+	)
+	node_dims = dims + Vector3i(3, 3, 3)
+	cell_dims = dims + Vector3i(2, 2, 2)
+	nodes.resize(node_dims.x * node_dims.y * node_dims.z)
+	cell_active.resize(cell_dims.x * cell_dims.y * cell_dims.z)
+	cell_vertices.resize(cell_active.size())
+	var precompute_started := Time.get_ticks_usec()
+	var x_count := node_dims.x
+	var z_count := node_dims.z
+	var surface_terms: Array[float] = []
+	var cave_y_terms: Array[float] = []
+	var cave_dz_terms: Array[float] = []
+	surface_terms.resize(x_count * z_count)
+	cave_y_terms.resize(x_count * z_count)
+	cave_dz_terms.resize(x_count * z_count)
+	var phase := float(posmod(seed, 100003)) * 0.000173
+	for z in range(-1, dims.z + 2):
+		var world_z := float(region_key.y) * Field.REGION_SIZE_Z + float(z) * step
+		var z_surface := 0.70 * cos(world_z * 0.31 - phase * 0.7)
+		for x in range(-1, dims.x + 2):
+			var world_x := float(region_key.x) * Field.REGION_SIZE_X + float(x) * step
+			var index := (z + 1) * x_count + x + 1
+			var surface_y := 3.8 \
+				+ 1.25 * sin(world_x * 0.22 + phase) \
+				+ z_surface \
+				+ 0.28 * sin((world_x + world_z) * 0.11 + phase * 0.3)
+			surface_terms[index] = surface_y
+			cave_y_terms[index] = 1.15 + 0.24 * sin(world_x * 0.25 + phase)
+			var cave_z := 6.0 + 1.05 * sin(world_x * 0.17 + phase * 0.6)
+			cave_dz_terms[index] = world_z - cave_z
+	last_pristine_precompute_usec = Time.get_ticks_usec() - precompute_started
+	var lattice_started := Time.get_ticks_usec()
+	for y in range(-1, dims.y + 2):
+		var local_y := Grid.MIN_BOUND.y + float(y) * step
+		var row_start := (y + 1) * node_dims.z * node_dims.x
+		for z in range(-1, dims.z + 2):
+			var layer_start := row_start + (z + 1) * node_dims.x
+			var term_start := (z + 1) * x_count
+			for x in range(-1, dims.x + 2):
+				var index := term_start + x + 1
+				var bounded_surface: float = minf(
+					surface_terms[index] - local_y, local_y - Field.MIN_Y
+				)
+				var cave_distance := Vector2(
+					local_y - cave_y_terms[index], cave_dz_terms[index]
+				).length() - 0.92
+				var density: float = minf(bounded_surface, cave_distance)
+				nodes[layer_start + x + 1] = roundi(density * SCALE)
+				last_generation_sample_count += 1
+	last_pristine_lattice_usec = Time.get_ticks_usec() - lattice_started
+	var rebuild_started := Time.get_ticks_usec()
+	for y in range(-1, dims.y + 1):
+		for z in range(-1, dims.z + 1):
+			for x in range(-1, dims.x + 1):
+				_rebuild_cell_fast_uniform_gate(x, y, z)
+	last_pristine_rebuild_usec = Time.get_ticks_usec() - rebuild_started
+	return true
+
+
+## Uniform-cell early exit: integer sign inspection, no per-cell
+## PackedFloat32Array allocation. Mixed cells delegate to the unchanged
+## Surface Nets oracle to preserve exactly the same Q8.8 vertex geometry.
+func _rebuild_cell_fast_uniform_gate(x: int, y: int, z: int) -> void:
+	var n := _node_index(x, y, z)
+	var stride_y := node_dims.x * node_dims.z
+	var stride_z := node_dims.x
+	var positive_count := int(nodes[n] >= 0) + int(nodes[n + 1] >= 0) \
+		+ int(nodes[n + stride_y] >= 0) + int(nodes[n + stride_y + 1] >= 0) \
+		+ int(nodes[n + stride_z] >= 0) + int(nodes[n + stride_z + 1] >= 0) \
+		+ int(nodes[n + stride_y + stride_z] >= 0) \
+		+ int(nodes[n + stride_y + stride_z + 1] >= 0)
+	if positive_count == 0 or positive_count == 8:
+		cell_active[_cell_index(x, y, z)] = 0
+		last_pristine_uniform_cells += 1
+		return
+	_rebuild_cell(x, y, z)
 
 
 
