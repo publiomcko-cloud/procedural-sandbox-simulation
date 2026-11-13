@@ -32,7 +32,7 @@ Original: `ProjectionService.release_scope` remove rotas reversas por todos os c
 - `process_route_cleanup_step` só é chamado pelo `terrain_demo` no thread principal, antes de `process_prefetch_step`; nenhum worker acessa os dicionários mutáveis e nenhuma fonte inativa é considerada válida.
 - Não altera SDF de terreno, localização de objetos, revisões, índices de authority, nem footprints.
 
-Contrato `dm14_lazy_route_cleanup_contract.gd` testa identidade de escopo, invisibilidade de fonte inativa antes do GC, máximo de remoções por frame, limpeza completa, reentrada em índice com keys diferentes e legado OFF. Regressões D4.1/D7.3 e A/B no workflow [43447705475](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43447705475), em execução ao redigir.
+Contrato `dm14_lazy_route_cleanup_contract.gd` testa identidade de escopo, invisibilidade de fonte inativa antes do GC, máximo de remoções por frame, limpeza completa, reentrada em índice com keys diferentes e legado OFF. Regressões D4.1/D7.3 e A/B no workflow [43447705475](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43447705475), concluído com sucesso.
 
 ## Critério de qualificação
 
@@ -53,3 +53,54 @@ Aprovar somente se:
 Controle: ambas DM14 flags como `0`, preservando DM13/12/11. Para teste somente de GC, manter `DENSE_REQUIRED=1` nos dois braços.
 
 **Pendência:** benchmark de limpeza gradual ainda não concluído neste registro. Não presumir qualificação ou fazer merge por executar testes headless.
+
+## Resultado consolidado e decisão — 13/11/2026
+
+O benchmark A/B de seis cenários do workflow [43447705475](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43447705475) terminou **PASS**; o contrato inicial de 22/22 verificações do GC, 65/65 do halo e as regressões D4.1 e D7.3 passaram. Todos os resultados utilizam `SANDBOX_DM12_FRAME_TRACE=0`; no A/B o halo denso fica ativado **nos dois braços**, isolando apenas `SANDBOX_DM14_LAZY_ROUTES`.
+
+| Média de 2 percursos outback a 18m/s | Lazy OFF | Lazy ON |
+|---|---:|---:|
+| Frames >33ms | 1,4565% | **0,971%** |
+| Frames >20ms | 8,252% | **5,8945%** |
+| Média frame | 17,4415ms | **17,297ms** |
+| Core canônico ausente | **24,236%** | 24,6525% |
+| Latência canônica p95 (média de p95) | **1544,938ms** | 1556,517ms |
+| Regiões HIGH visuais concluídas | **77** | 76,5 |
+
+O número de frames >33ms diminuiu **33,3%** e os >20ms caíram **28,6%** nessa pequena amostra; porém **não há prova de causalidade**. Os mesmos 15 deslocamentos instrumentados de cada variante apresentaram a soma da etapa `release_scope` de **97,410ms baseline vs 104,767ms lazy**, e duração da janela total **114,861ms vs 121,486ms**. Ou seja, a transformação **não reduziu de forma mensurável o próprio hotpath** de liberação neste comparativo. A melhora de picos pode refletir escalonamento e variância do runner. **Não promover por causa apenas da redução observada dos frames lentos.** A próxima pesquisa deve subdividir internamente `release_scope` (`_remove_scope_routes`, limpeza de mapas, cache dormant e telemetria) antes de otimizar mais.
+
+Parado, 277 regiões completas e 268 visuais HIGH em ambos; tempo até FULL HIGH de **13,435s → 13,473s** (diferença +0,038s). Não houve lacunas finais nos ensaios.
+
+**Qualificação de segurança reforçada:** branch `exp/dm14-lazy-route-qualification`, workflow [43449107194](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43449107194): estágio `safety` **PASS**, com quatro suites rodando com `SANDBOX_DM14_LAZY_ROUTES=1`, incluindo fixture com efeito real, verificação de `effect_count` antes/depois da remoção, reentrada com rotas distintas, D4.1 dormant scope e D7.3 projection source cache. O job de **GPU interativo está na fila** no momento da atualização, não se presume PASS.
+
+**Veredito:** `DM14_EFFECT_ROUTE_SAFE_EXPERIMENT_PERFORMANCE_UNPROVEN`. O código está isolado, exactness qualificada nos casos testados e A/B headless concluído, mas a alteração não é elegível para ser o padrão da `main`. Halo denso também permanece opt-in. Não alterar a arquitetura canônica, mod-first, persistência nem o conjunto de 81 escopos.
+
+### PowerShell para avaliação visual local (opt-in)
+
+```powershell
+cd C:\Dev\sandbox-sim-dev
+git fetch origin
+git switch exp/dm14-lazy-route-qualification
+git pull --ff-only origin exp/dm14-lazy-route-qualification
+
+$env:SANDBOX_TERRAIN_BACKEND = "b4"
+$env:SANDBOX_STREAM_PROFILE = "adaptive-skip-progressive"
+$env:SANDBOX_DM9_FAST_B4 = "1"
+$env:SANDBOX_DM9_PREFETCH = "0"
+$env:SANDBOX_DM9_VISUAL_ADAPTIVE = "1"
+$env:SANDBOX_DM9_VISUAL_WORKERS = "4"
+$env:SANDBOX_DM11_CANONICAL_FAST_B4 = "1"
+$env:SANDBOX_DM11_VISUAL_LANE = "0"
+$env:SANDBOX_DM12_SURFACE_SLICE = "1"
+$env:SANDBOX_DM12_FRAME_TRACE = "0"
+$env:SANDBOX_DM13_WATER_WORKERS = "1"
+$env:SANDBOX_DM13_WATER_NATIVE = "1"
+$env:SANDBOX_DM14_DENSE_REQUIRED = "1"
+$env:SANDBOX_DM14_LAZY_ROUTES = "1"
+$env:SANDBOX_DM14_EFFECT_TRACE = "0"
+$env:SANDBOX_PERF_TRACE = "1"
+
+& "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --path .\game
+```
+
+Para controle A/B da DM14, manter o mesmo branch e desligar só `SANDBOX_DM14_LAZY_ROUTES=0`; para comparação completa com DM13, também `SANDBOX_DM14_DENSE_REQUIRED=0`.
