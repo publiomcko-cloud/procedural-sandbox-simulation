@@ -170,6 +170,12 @@ foreach ($route in $Routes) {
         $workerRunMs = @()
         $uploadMs = @()
         $snapshotMs = @()
+        $dm11CanonicalSampleMs = @()
+        $dm11CanonicalCellMs = @()
+        $dm11CanonicalMeshMs = @()
+        $dm11CanonicalUniformCount = @()
+        $dm11PristineCacheHits = 0
+        $dm11VisualLaneCompletions = 0
         $dm9VisualWorkerMs = @()
         $dm9VisualQueueMs = @()
         $dm9VisualFieldMs = @()
@@ -195,6 +201,7 @@ foreach ($route in $Routes) {
                 'terrain_stream_budget_window' { $windows += $event }
                 'dm8_radial_gap_sample' { $radialSamples += $event }
                 'dm9_visual_shell_complete' {
+                    if ([string]$event.dm11_visual_lane -eq 'native_low') { $dm11VisualLaneCompletions++ }
                     $dm9VisualWorkerMs += ([double]$event.worker_run_usec / 1000.0)
                     $dm9VisualQueueMs += ([double]$event.worker_queue_usec / 1000.0)
                     $dm9VisualFieldMs += ([double]$event.field_generate_usec / 1000.0)
@@ -214,6 +221,13 @@ foreach ($route in $Routes) {
                     if ($action -eq 'promote' -and [bool]$event.ready) { $dm9ReadyHits++ }
                 }
                 'terrain_mesh_job_complete' {
+                    if ([string]$event.terrain_backend -eq 'b4') {
+                        $dm11CanonicalSampleMs += ([double]$event.dm11_canonical_sample_usec / 1000.0)
+                        $dm11CanonicalCellMs += ([double]$event.dm11_canonical_cell_usec / 1000.0)
+                        $dm11CanonicalMeshMs += ([double]$event.dm11_surface_mesh_usec / 1000.0)
+                        $dm11CanonicalUniformCount += [int]$event.dm11_canonical_uniform_cells
+                        if ([bool]$event.dm11_fast_sdf_cache) { $dm11PristineCacheHits++ }
+                    }
                     $workerQueueMs += ([double]$event.worker_queue_usec / 1000.0)
                     $workerRunMs += ([double]$event.worker_run_usec / 1000.0)
                     $uploadMs += ([double]$event.upload_usec / 1000.0)
@@ -311,6 +325,17 @@ foreach ($route in $Routes) {
             dm9_enabled = ($env:SANDBOX_DM9_PREFETCH -eq '1')
             dm9_lifecycle = $dm9ByAction
             dm9_visual_worker_limit = $(if ($env:SANDBOX_DM9_VISUAL_WORKERS) { [int]$env:SANDBOX_DM9_VISUAL_WORKERS } else { 1 })
+            dm11_visual_lane_enabled = ($env:SANDBOX_DM11_VISUAL_LANE -eq '1')
+            dm11_visual_lane_completions = $dm11VisualLaneCompletions
+            dm11_canonical_fast_b4_enabled = ($env:SANDBOX_DM11_CANONICAL_FAST_B4 -eq '1')
+            dm11_canonical_sample_p50_ms = Get-Percentile $dm11CanonicalSampleMs 0.50
+            dm11_canonical_sample_p95_ms = Get-Percentile $dm11CanonicalSampleMs 0.95
+            dm11_canonical_cell_p50_ms = Get-Percentile $dm11CanonicalCellMs 0.50
+            dm11_canonical_cell_p95_ms = Get-Percentile $dm11CanonicalCellMs 0.95
+            dm11_canonical_mesh_p50_ms = Get-Percentile $dm11CanonicalMeshMs 0.50
+            dm11_canonical_mesh_p95_ms = Get-Percentile $dm11CanonicalMeshMs 0.95
+            dm11_canonical_uniform_cells_total = [long]$(if ($dm11CanonicalUniformCount.Count -gt 0) { ($dm11CanonicalUniformCount | Measure-Object -Sum).Sum } else { 0 })
+            dm11_canonical_pristine_cache_hits = $dm11PristineCacheHits
             dm9_visual_shell_complete_count = $dm9VisualWorkerMs.Count
             dm9_fast_b4 = ($env:SANDBOX_DM9_FAST_B4 -eq '1')
             dm9_full_high_elapsed_ms = $(if ($dm9SessionStartUsec -ge 0 -and $dm9FullHighUsec -ge $dm9SessionStartUsec) { [Math]::Round(($dm9FullHighUsec - $dm9SessionStartUsec) / 1000.0, 3) } else { $null })
