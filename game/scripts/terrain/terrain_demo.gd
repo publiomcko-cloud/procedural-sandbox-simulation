@@ -4973,6 +4973,13 @@ func _dm8_sample_gap_pressure(now: int) -> void:
 	var first_gap_distance_m := INF
 	var front_gap_count := 0
 	var velocity_front_gap_count := 0
+	var corridor_required := 0
+	var corridor_ready := 0
+	var movement_axis := Vector2(_dm10_velocity.x, _dm10_velocity.z)
+	if _last_f10_speed_mps <= DM10VisualPolicy.SLOW_MPS or movement_axis.length_squared() < 0.001:
+		movement_axis = Vector2.ZERO
+	else:
+		movement_axis = movement_axis.normalized()
 	var new_requests := 0
 	var gap_ages_ms: Array[int] = []
 	var currently_requested: Dictionary = {}
@@ -4980,6 +4987,14 @@ func _dm8_sample_gap_pressure(now: int) -> void:
 		var id := _region_id(key)
 		currently_requested[id] = true
 		var ready := active_regions.has(id) or _dm5_has_cached_high(id)
+		if movement_axis.length_squared() > 0.0:
+			var displacement := DM3Policy.center_world(key) - Vector2(orbit_target.x, orbit_target.z)
+			var longitudinal := displacement.dot(movement_axis)
+			var lateral := absf(displacement.cross(movement_axis))
+			if longitudinal >= 0.0 and longitudinal <= 48.0 and lateral <= 20.0:
+				corridor_required += 1
+				if ready:
+					corridor_ready += 1
 		var distance_m := DM3Policy.world_distance_m(key, orbit_target)
 		if ready:
 			terrain_ready += 1
@@ -5031,6 +5046,9 @@ func _dm8_sample_gap_pressure(now: int) -> void:
 		"terrain_gap_nearest_m": first_gap_distance_m if is_finite(first_gap_distance_m) else -1.0,
 		"terrain_gap_front_cone": front_gap_count,
 		"dm10_velocity_front_gap": velocity_front_gap_count,
+		"dm10_corridor_required": corridor_required,
+		"dm10_corridor_ready": corridor_ready,
+		"dm10_corridor_coverage_pct": 100.0 * float(corridor_ready) / float(corridor_required) if corridor_required > 0 else -1.0,
 		"terrain_gap_age_p95_ms": gap_p95_ms,
 		"terrain_gap_new_since_last_scan": new_requests,
 		"rock_required_outer": rock_targets,
