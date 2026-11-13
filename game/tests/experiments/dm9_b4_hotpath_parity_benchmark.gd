@@ -47,7 +47,7 @@ func _run() -> void:
 		var fast_mesh_started := Time.get_ticks_usec()
 		var i := 0
 		for coord in Grid.all_coordinates():
-			var actual: Dictionary = fast.build_chunk(coord)
+			var actual: Dictionary = fast.build_chunk_pristine_fast(coord)
 			var expected: Dictionary = originals[i]
 			_check(actual.get("valid", false) == expected.get("valid", false),
 				"exact chunk validity")
