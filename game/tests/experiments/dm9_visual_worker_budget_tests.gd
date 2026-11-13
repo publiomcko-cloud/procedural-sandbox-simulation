@@ -9,18 +9,18 @@ func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
-	_check(Policy.effective_limit(8, false, 0, 0, 0, 16.7, 2) == 1, "missing canonical core reserves workers")
-	_check(Policy.effective_limit(8, true, 1, 0, 0, 16.7, 2) == 1, "loading core reserves workers")
-	_check(Policy.effective_limit(8, true, 0, 1, 0, 16.7, 2) == 1, "inflight canonical mesh reserves workers")
-	_check(Policy.effective_limit(8, true, 0, 0, 18.0, 16.7, 2) == 2, "moving retains two background jobs")
-	_check(Policy.effective_limit(8, true, 0, 0, 0.0, 16.7, 2) == 8, "idle raises visual concurrency")
+	_check(Policy.effective_limit(4, false, 0, 0, 0, 16.7, 2) == 1, "missing canonical core reserves workers")
+	_check(Policy.effective_limit(4, true, 1, 0, 0, 16.7, 2) == 1, "loading core reserves workers")
+	_check(Policy.effective_limit(4, true, 0, 1, 0, 16.7, 2) == 1, "inflight canonical mesh reserves workers")
+	_check(Policy.effective_limit(4, true, 0, 0, 18.0, 16.7, 2) == 1, "moving reserves one background worker")
+	_check(Policy.effective_limit(4, true, 0, 0, 0.0, 16.7, 2) == 4, "idle raises visual concurrency")
 	_check(Policy.effective_limit(4, true, 0, 0, 0.0, 16.7, 2) == 4, "config clamp supports four")
-	_check(Policy.effective_limit(12, true, 0, 0, 0.0, 16.7, 2) == 8, "upper bound eight")
+	_check(Policy.effective_limit(8, true, 0, 0, 0.0, 16.7, 2) == 4, "upper bound four")
 	_check(Policy.effective_limit(0, true, 0, 0, 0.0, 16.7, 2) == 1, "never zero worker")
-	_check(Policy.effective_limit(8, true, 0, 0, 0.0, 20.0, 2) == 1, "frame pressure throttles")
-	_check(Policy.effective_limit(8, true, 0, 0, 0.0, 16.7, 14.0) == 1, "process pressure throttles")
-	_check(Policy.effective_limit(8, true, 0, 0, 0.0, INF, 2) == 1, "nonfinite frame throttles")
-	_check(Policy.effective_limit(8, true, 0, 0, INF, 16.7, 2) == 2, "nonfinite movement treated urgent")
+	_check(Policy.effective_limit(4, true, 0, 0, 0.0, 20.0, 2) == 1, "frame pressure throttles")
+	_check(Policy.effective_limit(4, true, 0, 0, 0.0, 16.7, 14.0) == 1, "process pressure throttles")
+	_check(Policy.effective_limit(4, true, 0, 0, 0.0, INF, 2) == 1, "nonfinite frame throttles")
+	_check(Policy.effective_limit(4, true, 0, 0, INF, 16.7, 2) == 1, "nonfinite movement treated urgent")
 	print("DM9_VISUAL_BUDGET_RESULT=" + JSON.stringify({
 		"assertions": assertions, "failures": failures,
 		"idle_max_workers": Policy.MAX_WORKERS,
