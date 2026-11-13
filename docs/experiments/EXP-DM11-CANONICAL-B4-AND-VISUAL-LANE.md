@@ -55,3 +55,31 @@ $env:SANDBOX_PERF_TRACE = '1'
 ```
 
 A separate safe comparison can disable `SANDBOX_DM11_VISUAL_LANE` without disabling canonical acceleration. The next bottleneck may be main-thread region publication, effect dependency projection, and progressive mesh presentation. The average `mesh_dispatch_and_upload` stage was around 3.2–3.5ms/frame in the initial headless movement trace; targeted per-frame tail tracing is needed before altering publication caps.
+
+## DM11 final candidate — canonical-only fast path
+
+**Chosen candidate:** `SANDBOX_DM11_CANONICAL_FAST_B4=1`, `SANDBOX_DM11_VISUAL_LANE=0`. The shared visual worker pool remains in place, with the DM9 fast B4 visual path and adaptive budget. Native threads are retained as a tested *opt-in* experimental alternate, not enabled by default: the prepared-snapshot factorial test showed no compelling core/visual or frame-tail advantage of native threads.
+
+**Prepared snapshot run 43421101767: exact parity 374/374 PASS, factorial 5-trial PASS, interactive Windows GTX 1050 Ti GPU PASS.** In the 720-frame 18m/s motion comparison, baseline vs canonical-only fast: canonical focus missing **76.806%→26.389%**, canonical region p95 **2107ms→1566ms**, HIGH exterior visual publications **46→80**, and frame spikes >33ms **3.190%→3.051%**. The native-lane combined candidate achieved 25.972% focus missing, 1612ms canonical p95, 75 exterior regions and 3.883% slow frames, less attractive overall. This was one trial per arm in that workflow.
+
+**Additional replicated A/B and GPU qualification is running on workflow 43421950396**: <https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43421950396>. Six trials (A/B motion repeated twice and A/B idle) with canonical-only fast, and real GUI/GPU smoke. This isolates the candidate from native-lane scheduling effects.
+
+**Local command after final qualification:**
+```powershell
+cd C:\Dev\sandbox-sim-dev
+git fetch origin
+git switch exp/dm11-canonical-fast-qualification
+git pull --ff-only origin exp/dm11-canonical-fast-qualification
+$env:SANDBOX_TERRAIN_BACKEND = "b4"
+$env:SANDBOX_STREAM_PROFILE = "adaptive-skip-progressive"
+$env:SANDBOX_DM9_FAST_B4 = "1"
+$env:SANDBOX_DM9_PREFETCH = "0"
+$env:SANDBOX_DM9_VISUAL_ADAPTIVE = "1"
+$env:SANDBOX_DM9_VISUAL_WORKERS = "4"
+$env:SANDBOX_DM11_CANONICAL_FAST_B4 = "1"
+$env:SANDBOX_DM11_VISUAL_LANE = "0"
+$env:SANDBOX_PERF_TRACE = "1"
+& "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --path .\game
+```
+
+**Fail-safe:** set `SANDBOX_DM11_CANONICAL_FAST_B4=0`; original canonical snapshot and geometry code remains accessible unchanged. `main` is untouched. Do not merge to main until visual/edited local QA and repeated A/B are accepted.
