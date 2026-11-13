@@ -16,6 +16,8 @@ var _effect: Dictionary = {
 	"peak_usec": 0, "target_count": 0, "pending_max_usec": 0
 }
 var _blockers: Dictionary = {}
+var _frame_phases: Dictionary = {}
+
 var _missing_focus: Dictionary = {
 	"not_requested": 0, "awaiting_first_dispatch": 0,
 	"submitting": 0, "awaiting_jobs_or_upload": 0,
@@ -137,6 +139,20 @@ func effect_result(prepared: Dictionary, elapsed_usec: int, target_count: int) -
 		_effect["failed"] = int(_effect["failed"]) + 1
 
 
+func frame_phase(name: String, elapsed_usec: int) -> void:
+	if not _frame_phases.has(name):
+		_frame_phases[name] = {
+			"calls": 0, "total_usec": 0, "peak_usec": 0, "over8ms": 0
+		}
+	var entry: Dictionary = _frame_phases[name]
+	var cost := maxi(0, elapsed_usec)
+	entry["calls"] = int(entry["calls"]) + 1
+	entry["total_usec"] = int(entry["total_usec"]) + cost
+	entry["peak_usec"] = maxi(int(entry["peak_usec"]), cost)
+	if cost >= 8000:
+		entry["over8ms"] = int(entry["over8ms"]) + 1
+
+
 func blocked(reason: String) -> void:
 	_blockers[reason] = int(_blockers.get(reason, 0)) + 1
 
@@ -188,6 +204,7 @@ func summary() -> Dictionary:
 		"stage_latency": percentiles,
 		"effect": _effect.duplicate(),
 		"dispatch_blockers": _blockers.duplicate(),
+		"frame_phases": _frame_phases.duplicate(true),
 		"missing_focus_frames_by_state": _missing_focus.duplicate(),
 		"dispatch_frames": _dispatch_frames.duplicate(),
 		"cancelled_by_reason": _cancelled.duplicate(),
