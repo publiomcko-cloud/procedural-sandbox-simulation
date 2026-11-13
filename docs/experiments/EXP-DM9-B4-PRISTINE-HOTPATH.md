@@ -40,3 +40,34 @@ $env:SANDBOX_DM9_VISUAL_WORKERS = '4'
 ```
 
 Revert instantly by setting `SANDBOX_DM9_FAST_B4=0`; the original algorithm is untouched and remains the default. Future candidate optimization: reduce `build_chunk` edge/Vector3i allocation overhead, with a separate exact 16-chunk parity gate and A/B run.
+
+## Second independent candidate — fast Surface Nets edge traversal
+
+Branch `exp/dm9-surface-nets-fast-edges`. The B4 visual-only `build_chunk_pristine_fast` removes repeated creation of `Vector3i` neighbor-coordinate objects and four-corner arrays for every oriented lattice edge. Integer strides compute the exact identical corner ownership, and the original `_append_quad` remains unchanged. No change to `generate_chunk` or authoritative/edited mesh paths. The existing exact test now compares **all 16 original versus fast chunk meshes**, passing **281 assertions, zero mismatches** over four seed/region cases.
+
+Microbench build_chunk cost (per 16-chunk region): original approximately 181.7–207.6 ms, optimized 25.7–55.6 ms in the second test. The timings varied with runner load; exact geometry is the acceptance oracle.
+
+### Integrated headless A/B — GitHub Actions 43406149610 (raw trace artifacts)
+
+Same seed, Windows runner, `adaptive-skip-progressive`, adaptive 4-worker max, prefetch off, 3,600-frame idle and 720-frame 18 m/s route, isolated fresh saves.
+
+| Metric | Baseline B4 | Both fast optimizations |
+|---|---:|---:|
+| **Actual elapsed until all 277 HIGH terrain regions** | **52.894s** | **16.035s** |
+| p50 visual HIGH worker time idle | 684.919 ms | 133.211 ms |
+| Idle visual HIGH regions ready at end | 268/268 exterior | 268/268 exterior |
+| Process CPU average idle (% total machine) | 10.89% | 4.07% |
+| Mean idle frame time (headless) | 17.032 ms | 16.827 ms |
+| Frames >20 ms idle | 2.416% | 1.139% |
+| Visual HIGH regions completed in 720-frame movement route | 15 | 52 |
+| Canonical focus missing during movement | 72.222% | 62.500% |
+| Canonical region load p95 in movement | 1958.632 ms | 2835.841 ms |
+| Frames >33 ms in movement | 1.942% | 4.022% |
+
+**Causality / qualification caveat:** Static full HIGH fill is 69.68% faster / ~3.30×. However the one movement trial shows more frame spikes and higher canonical p95 latency despite improved percentage of canonical focus coverage. Do not infer the canonical pipeline improved. A follow-up A/B repeated three movement pairs and a real GPU test were initiated before enabling by default. The first GPU lane failed because PowerShell 5.1 does not reliably pipe `Write-Host` through `Out-String` when checking a positive preflight receipt; the preflight's own session checks passed. Corrected workflow calls the throwing preflight directly, without inspecting host output.
+
+### Further investigation
+
+In `sdf_brush_edit_state.gd`, `sample_density_snapshot()` performs tile index/fallback, edit array validation, effect-frame composition and seed SDF sampling per lattice site. In `discrete_surface_nets_backend.generate_chunk()`, full per-cell `PackedFloat32Array` allocations remain for editable authoritative chunks. These are plausible next optimizations but **not changed** in this campaign. Any canonical optimization requires explicit brush/cave/effect/modeled tile parity tests, as well as revision/stale-job/collision/save invariants.
+
+**Do not merge to main**, and leave `SANDBOX_DM9_FAST_B4=0` as default until movement and GPU qualification completes.
