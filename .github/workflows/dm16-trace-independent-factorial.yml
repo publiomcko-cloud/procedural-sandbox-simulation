@@ -1,0 +1,115 @@
+name: DM16 trace-independent frame-tail experiment
+on:
+  push:
+    branches:
+      - exp/dm16-trace-independent-frame-evidence
+  workflow_dispatch:
+
+concurrency:
+  group: dm16-trace-factorial-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+
+jobs:
+  exact:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 25
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Godot 4.7.2 strict script parse
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          & $env:GODOT_BIN --headless --editor --path .\game --import
+          if ($LASTEXITCODE -ne 0) { throw 'DM16 Godot import failed' }
+          foreach ($script in @(
+            'res://scripts/diagnostics/dm16_benchmark_probe.gd',
+            'res://scripts/terrain/terrain_demo.gd',
+            'res://tests/experiments/dm16_benchmark_probe_contract.gd'
+          )) {
+            & $env:GODOT_BIN --headless --path .\game --check-only --script $script
+            if ($LASTEXITCODE -ne 0) { throw "DM16 parse failed $script" }
+          }
+          Write-Host 'DM16_PARSE_PASS'
+      - name: Independent prior-frame attribution and regression
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'dm16-contract'
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          $ErrorActionPreference = 'Continue'
+          foreach ($case in @(
+            @{name='dm16'; script='res://tests/experiments/dm16_benchmark_probe_contract.gd'; receipt='DM16_BENCH_PROBE_PASS'},
+            @{name='dm15'; script='res://tests/experiments/dm15_dormant_rollup_contract.gd'; receipt='DM15_DORMANT_ROLLUP_PASS'},
+            @{name='dm14'; script='res://tests/experiments/dm14_lazy_route_cleanup_contract.gd'; receipt='DM14_ROUTE_CONTRACT_PASS'}
+          )) {
+            $out = & $env:GODOT_BIN --headless --path .\game --script $case.script 2>&1 | Out-String
+            $exit = $LASTEXITCODE
+            $out | Set-Content -LiteralPath (Join-Path $root "$($case.name).log") -Encoding UTF8
+            Write-Host ("DM16_CONTRACT_CASE " + $case.name + " passed=" + ($exit -eq 0 -and $out.Contains($case.receipt)))
+            if ($exit -ne 0 -or -not $out.Contains($case.receipt) -or $out -match 'SCRIPT ERROR:|Parse Error:|DM16_BENCH_PROBE_FAIL:') {
+              Write-Host $out
+              throw "DM16 contract failed $($case.name)"
+            }
+          }
+          Write-Host 'DM16_EXACT_PASS'
+      - name: Save tests
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm16-contract
+          path: ${{ runner.temp }}\dm16-contract\*.log
+          retention-days: 14
+          if-no-files-found: warn
+
+  factorial:
+    needs: exact
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 80
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+      SANDBOX_TERRAIN_BACKEND: b4
+      SANDBOX_DM9_FAST_B4: '1'
+      SANDBOX_DM9_PREFETCH: '0'
+      SANDBOX_DM9_VISUAL_ADAPTIVE: '1'
+      SANDBOX_DM9_VISUAL_WORKERS: '4'
+      SANDBOX_DM11_CANONICAL_FAST_B4: '1'
+      SANDBOX_DM11_VISUAL_LANE: '0'
+      SANDBOX_DM12_SURFACE_SLICE: '1'
+      SANDBOX_DM12_FRAME_TRACE: '0'
+      SANDBOX_DM13_WATER_WORKERS: '1'
+      SANDBOX_DM13_WATER_NATIVE: '1'
+      SANDBOX_DM14_DENSE_REQUIRED: '1'
+      SANDBOX_DM14_LAZY_ROUTES: '0'
+      SANDBOX_DM15_DORMANT_ROLLUP: '1'
+      SANDBOX_DM15_RELEASE_TRACE: '0'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Same-seed 18mps OFF/light/full interleaved plus stationary FULL HIGH
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        timeout-minutes: 70
+        run: |
+          & $env:GODOT_BIN --headless --editor --path .\game --import
+          if ($LASTEXITCODE -ne 0) { throw 'DM16 project import failed' }
+          & .\scripts\perf\run-dm16-trace-factorial.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir (Join-Path $env:RUNNER_TEMP 'dm16-factorial') -MotionFrames 720 -IdleFrames 3600
+          if ($LASTEXITCODE -ne 0) { throw 'DM16 factorial experiment failed' }
+          Write-Host 'DM16_FULL_MATRIX_PASS'
+      - name: Retain all raw stderr, stdout, independent receipts and factorial comparison
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm16-trace-factorial
+          path: |
+            ${{ runner.temp }}\dm16-factorial\**\*.log
+            ${{ runner.temp }}\dm16-factorial\**\*.json
+          retention-days: 14
+          if-no-files-found: warn
