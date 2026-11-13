@@ -1,6 +1,6 @@
 # DM9 — canonical prefetch + CPU visual throughput / gap attribution
 
-Status: **experimental, CI pending**. Derived from qualified DM8 commit `10bc0d717c386657f42aed94bb45044241645bce`. No merge into `main`.
+Status: **experimental, CI pending for conservative 4-worker candidate; do not merge into main**. Derived from qualified DM8 commit `10bc0d717c386657f42aed94bb45044241645bce`. No merge into `main`.
 
 ## Problem
 
@@ -44,3 +44,24 @@ $env:SANDBOX_DM9_VISUAL_WORKERS='4'
 ```
 
 **Important:** local world/mod isolation is recommended as in DM8; the above block is for a pre-existing experimental worktree only.
+
+## Measured evidence / updated 2026-11-13
+
+- All throughput measurements use the **actual Godot engine process**, not the ~6 MiB Windows console stub. Baseline normal-speed CPU averages ~16.8% total logical-core capacity.
+- Canonical 3x3 at 18 m/s: 1 visual worker baseline versus 8-worker adaptive (two repeated trials): region-load p95 ~1,992 ms versus ~2,249 ms; frame time >33 ms in ~2.84% versus ~5.20% frames; actual CPU ~16.8% versus ~21.5%; visual HIGH regions completed ~15 versus ~10.5. The adaptive priority bypassed canonical worker queues (p95 ~151 ms to ~3.6 ms), but worker runs nearly doubled (p95 ~332 ms to ~634 ms). Increasing thread count worsened CPU execution throughput.
+- Stationary 3,600 frames: 4 fixed visual workers fully published **268 exterior HIGH regions** (zero outer gaps), ~14.0% CPU average, ~2.64% frames >20 ms. The 8-worker adaptive run published only **185** regions, leaving **85 gaps**; ~24.9% CPU and ~23.08% frames >20 ms. Eight visual workers are rejected.
+- Canonical speculative prefetch (up to six 5x5 perimeter regions) had no completed/ready hit before core entry in the original test: many begin/discard cycles and no demonstrated improvement. Keep `SANDBOX_DM9_PREFETCH=0`; this experimental code remains **opt-in disabled**.
+- B4 HIGH region worker field sampling p95 ~0.7–1.2s at one or four workers, plus sixteen-chunk meshing ~0.35–0.66s. The **upload is ~1 ms**; SDF sampling plus meshing dominate rather than GPU upload. Exact data varies with simultaneous workloads and route.
+- Safer candidate has been committed but is still pending complete A/E/E/A and stationary/GPU validation: `SANDBOX_DM9_VISUAL_ADAPTIVE=1`, `SANDBOX_DM9_VISUAL_WORKERS=4`, `SANDBOX_DM9_PREFETCH=0`. It uses one visual worker in movement or while canonical core is incomplete, up to four only when stationary and canonical-ready, restores existing canonical job priorities, and throttles on frame/process spikes.
+
+**Do not promote 4-worker adaptation until the paired runner results finish.** User-visible HIGH-only satisfaction and canonical gameplay-ready region load are separate metrics: improving one does not prove improving the other. Headless frame measurements do not replace the interactive Windows GPU smoke test.
+
+### Current local experimental candidate (supersedes original example)
+
+```powershell
+$env:SANDBOX_TERRAIN_BACKEND='b4'
+$env:SANDBOX_STREAM_PROFILE='adaptive-skip-progressive'
+$env:SANDBOX_DM9_PREFETCH='0'
+$env:SANDBOX_DM9_VISUAL_ADAPTIVE='1'
+$env:SANDBOX_DM9_VISUAL_WORKERS='4'
+```
