@@ -1506,6 +1506,11 @@ func update_resident_target_regions(
 		_enqueue_prefetch_regions(required, false)
 	dm14_enqueue_usec = Time.get_ticks_usec() - dm14_stage_started
 	var window_duration_usec := Time.get_ticks_usec() - window_started_usec
+	if _perf_trace_enabled:
+		var dm15_dormant_rollup: Dictionary = projection.take_dormant_store_rollup()
+		if not dm15_dormant_rollup.is_empty():
+			dm15_dormant_rollup["window_target_count"] = target_regions.size()
+			PerformanceTrace.emit("dm15_dormant_store_rollup", dm15_dormant_rollup)
 	if _dm14_effect_trace:
 		PerformanceTrace.emit("dm14_effect_window_stages", {
 			"window_duration_usec": window_duration_usec,
