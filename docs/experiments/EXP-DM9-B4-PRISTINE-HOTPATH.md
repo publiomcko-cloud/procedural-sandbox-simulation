@@ -71,3 +71,26 @@ Same seed, Windows runner, `adaptive-skip-progressive`, adaptive 4-worker max, p
 In `sdf_brush_edit_state.gd`, `sample_density_snapshot()` performs tile index/fallback, edit array validation, effect-frame composition and seed SDF sampling per lattice site. In `discrete_surface_nets_backend.generate_chunk()`, full per-cell `PackedFloat32Array` allocations remain for editable authoritative chunks. These are plausible next optimizations but **not changed** in this campaign. Any canonical optimization requires explicit brush/cave/effect/modeled tile parity tests, as well as revision/stale-job/collision/save invariants.
 
 **Do not merge to main**, and leave `SANDBOX_DM9_FAST_B4=0` as default until movement and GPU qualification completes.
+
+## Repeated normal-speed movement qualification — run 43407266771
+
+The second full A/B repeats the normal 18 m/s route three times per arm, with identical seed, geometry, isolated saves, 720 frames each and original/prefetch-off canonical scheduler. Exact voxel/geometry parity remains PASS.
+
+| Metric (mean of three movement trials) | Baseline | Both fast visual optimizations |
+|---|---:|---:|
+| Visual HIGH regions completed | 15.0 | 47.7 |
+| Missing canonical focus frames | 71.99% | 66.44% |
+| Mean frame time (headless) | 17.57 ms | 18.06 ms |
+| Frames >33 ms | 1.99% | 3.42% |
+| Canonical region p95 latency (mean of per-run p95, small sample) | 2.35 s | 2.93 s |
+| p50 visual HIGH worker runtime | ~747 ms | ~176 ms |
+
+The movement result is a **real tradeoff**, not an unequivocal improvement: much faster visual mesh completion and ~5.55 percentage-point lower missing canonical focus, but headless frame spike share and some region load tails regress. Thus retain `SANDBOX_DM9_FAST_B4=0` by default; recommend testing a **movement-specific, canonical-aware visual submission/publish pace** (e.g. one HIGH derived region every 350–500ms until the 3x3 core is complete) while allowing full fast throughput at rest. Validate A/B before enabling as default.
+
+The two independently measured stationary runs showed full 277-region HIGH fill:
+- original baseline: **52.894 s** and **52.370 s**;
+- both fast optimizations: **16.035 s** and **16.208 s**.
+
+All eight benchmark variants completed successfully; GPU smoke follows independently. Reports are source-backed by GitHub Actions workflow evidence.
+
+**No production deployment, no main merge, no default activation.**
