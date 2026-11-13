@@ -51,6 +51,15 @@ func _run() -> void:
 				_check(job.surface_cache == original_surface, "worker immutable SDF")
 				_check(job.shoreline == original_shoreline, "worker immutable shoreline")
 				_check(job.finished_usec >= job.started_usec, "worker measured")
+			var native := Job.new(region, original_env, original_surface,
+				original_shoreline, mode, true, {})
+			var lane := Thread.new()
+			var launched := lane.start(Callable(native, "run"), Thread.PRIORITY_LOW)
+			_check(launched == OK, "native worker low-priority thread launched")
+			if launched == OK:
+				lane.wait_to_finish()
+				_check(native.result == baseline, "native low-priority geometry parity exact")
+				_check(native.worker_thread_id != 0, "native caller identity recorded")
 			environment = original_env
 	_check(Visual.derive_shoreline_geometry(Vector2i.ZERO, {}, {}, {}).get("ok", false)
 		== false, "invalid input remains invalid")
