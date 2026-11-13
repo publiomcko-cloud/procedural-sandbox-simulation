@@ -178,9 +178,9 @@ $analysis = [ordered]@{}
 foreach ($routeName in @('straight-18','outback-18','straight-54','idle')) {
     $subset = @($pairRecords | Where-Object { $_.route -eq $routeName })
     $a = [ordered]@{
-        delta_p99_ms=Get-CI $subset 'delta_frame_p99_ms'
-        delta_over33_pp=Get-CI $subset 'delta_frame_over33_pct'
-        delta_high_completed=Get-CI $subset 'delta_high_completed'
+        delta_p99_ms=(Get-CI $subset 'delta_frame_p99_ms')
+        delta_over33_pp=(Get-CI $subset 'delta_frame_over33_pct')
+        delta_high_completed=(Get-CI $subset 'delta_high_completed')
     }
     if ($routeName -eq 'idle') {
         $a['delta_high_fill_ms'] = Get-CI $subset 'delta_high_fill_ms'
@@ -193,10 +193,10 @@ foreach ($routeName in @('straight-18','outback-18','straight-54','idle')) {
 }
 $normal = @($pairRecords | Where-Object { $_.route -in @('straight-18','outback-18') })
 $analysis['normal_18_pooled'] = [ordered]@{
-    delta_missing_focus_pp=Get-CI $normal 'delta_missing_focus_pct'
-    delta_p99_ms=Get-CI $normal 'delta_frame_p99_ms'
-    delta_over33_pp=Get-CI $normal 'delta_frame_over33_pct'
-    delta_high_completed=Get-CI $normal 'delta_high_completed'
+    delta_missing_focus_pp=(Get-CI $normal 'delta_missing_focus_pct')
+    delta_p99_ms=(Get-CI $normal 'delta_frame_p99_ms')
+    delta_over33_pp=(Get-CI $normal 'delta_frame_over33_pct')
+    delta_high_completed=(Get-CI $normal 'delta_high_completed')
 }
 $e = $analysis['normal_18_pooled']
 $idle = $analysis['idle']
