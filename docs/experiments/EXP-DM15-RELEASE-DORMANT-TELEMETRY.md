@@ -79,3 +79,41 @@ $env:SANDBOX_PERF_TRACE_MIN_MS = "2"
 ## Critério de aceitação
 
 Exigir regressões PASS, nenhuma diferença semântica em edição e LRU, redução de emissões e de CPU da própria etapa, ausência de piora consistente no core canônico/visual HIGH e idealmente melhora de p95/p99 de frame nas rotas repetidas. **Não fazer merge na main ou ativar por padrão antes de evidência e QA visual.**
+
+
+## Veredito final da campanha headless
+
+Workflow [43464613938](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43464613938): **exact PASS, A/B PASS, microprofile PASS**. `gpu-interactive`: verificar o status separadamente; o runner de sessão gráfica Windows pode permanecer indisponível.
+
+**Aprovação de equivalência:** cinco suites de contrato passaram em Windows/Godot 4.7.2, incluindo nove escopos com dois efeitos cada, `dormant` LRU e cache-hit idênticos, restauração de snapshots/revisões, DM14 rotas, DM14 halo denso, D4.1 dormant e D7.3 source cache.
+
+**Microestágios com `SANDBOX_DM15_RELEASE_TRACE=1`, lazy OFF, 104 releases por braço (mesma seed/rota de 720 frames):**
+
+| Fase (soma) | Original `ROLLUP=0` | Otimizado `ROLLUP=1` |
+|---|---:|---:|
+| `release_scope` total | 111,540ms (máx 5,228ms) | **5,512ms (máx 0,104ms)** |
+| Rotas | 5,106ms | 3,824ms |
+| `dormant` inclusive logging | **105,593ms** | **1,170ms** |
+| Mutação real da LRU/cache | **0,880ms** | 0,527ms |
+| Serialização/emissão de evento | **103,836ms (máx 5,153ms)** | **0,131ms (máx 0,002ms)** |
+
+**Causa confirmada:** o principal custo da fase `dormant` (~98,3%) era o JSON/console de `effect_scope_dormant_store`, não o cache. A redução no custo total medido de `release_scope` é **~95,1%**, em cenário instrumentado. Com `SANDBOX_PERF_TRACE=0`, o evento individual já não era emitido; não atribuir a essa mudança ganho geral fora do tracing.
+
+**A/B de frame sem o detalhamento DM15, mas com `SANDBOX_PERF_TRACE=1` igualmente ligado:**
+
+| Média de 2 percursos outback-18 (720 frames) | Original | Rollup |
+|---|---:|---:|
+| Frames >33ms | **1,526%** | 1,595% |
+| Frames >20ms | 8,669% | **7,975%** |
+| Média de frame | 17,517ms | **17,455ms** |
+| Core canônico ausente | 26,389% | **25,070%** |
+| p95 carga canônica (média de p95) | 1595,786ms | **1554,089ms** |
+| HIGH visual concluídas | 70,5 | 71,5 |
+
+Pares individuais: frame >33ms 1,803%→1,110% no primeiro, **1,248%→2,080% no segundo**. Portanto **não há evidência consistente de redução da frequência de frames >33ms** nesta amostra, apesar da forte redução no custo isolado da rotina. O core canônico teve melhora modesta e não é possível demonstrar significância estatística com dois pares.
+
+**Parado (3600 frames, uma execução por braço):** 268 regiões HIGH externas em ambos, total HIGH 14,118s original vs 14,565s rollup (+3,2%, inconclusivo com uma amostra). Nenhuma alteração de qualidade de malha ou cobertura.
+
+**Evento detalhado substituído:** 105 eventos `effect_scope_dormant_store` → 12 eventos agregados `dm15_dormant_store_rollup` no percurso móvel, sem perda de contagem nem efeito material; identidades individuais ainda disponíveis desligando o rollup. Em idle, zero eventos nas duas variantes (sem liberação de escopos).
+
+**Veredito:** `DM15_DIAGNOSTIC_HOTPATH_QUALIFIED_FRAME_TAIL_UNPROVEN`. Candidato opt-in recomendado **somente para sessões com rastreamento de desempenho** para reduzir o overhead e melhorar a fidelidade das medidas. Não incorporar automaticamente como aceleração de gameplay nem alterar `main`; validar visualmente com runner GPU ou sessão local. A próxima investigação de picos com rastreamento reduzido deve controlar o efeito dos outros eventos `PerformanceTrace.emit` e usar referências com a instrumentação desligada.
