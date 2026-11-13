@@ -59,9 +59,7 @@ jobs:
             $output = & $env:GODOT_BIN --headless --path .\game --script $case.script 2>&1 | Out-String
             $exitCode = $LASTEXITCODE
             $output | Set-Content (Join-Path $dir "$($case.name).log") -Encoding UTF8
-            Write-Host ("DM14_QA_RECEIPT " + $case.name + ": " +
-              ($output -split '?
-' | Where-Object { $_.Contains($case.receipt) } | Select-Object -Last 1))
+            Write-Host ("DM14_QA_RECEIPT " + $case.name + " matched=" + $output.Contains($case.receipt))
             if ($exitCode -ne 0 -or -not $output.Contains($case.receipt) -or
                 $output -match 'SCRIPT ERROR:|Parse Error:|DM14_ROUTE_CONTRACT_FAIL:') {
               throw "DM14 opt-in regression: $($case.name)"
