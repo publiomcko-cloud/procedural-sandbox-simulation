@@ -273,6 +273,7 @@ var _dm9_ready_hits := 0
 var _dm9_visual_worker_limit := 1
 var _dm9_visual_worker_effective_limit := 1
 var _dm9_visual_adaptive := false
+var _dm9_fast_b4 := false
 var _dm9_shell_started_total := 0
 var _dm9_shell_completed_total := 0
 var _lookahead_stage_begin_total := 0
@@ -413,6 +414,9 @@ func _ready() -> void:
 	if _dm3_enabled() and OS.get_environment("SANDBOX_DM9_VISUAL_WORKERS").is_valid_int():
 		_dm9_visual_worker_limit = clampi(int(OS.get_environment("SANDBOX_DM9_VISUAL_WORKERS")), 1, DM9VisualBudget.MAX_WORKERS)
 	_dm9_visual_adaptive = _dm3_enabled() and OS.get_environment("SANDBOX_DM9_VISUAL_ADAPTIVE") == "1"
+	_dm9_fast_b4 = _dm3_enabled() and OS.get_environment("SANDBOX_DM9_FAST_B4") == "1"
+	if _dm9_fast_b4:
+		print("DM9_FAST_B4: enabled=1 pristine_visual_only=1 authoritative_backend_unchanged=1")
 	if _dm9_visual_adaptive:
 		print("DM9_VISUAL_ADAPTIVE: enabled=1 max_workers=%d core_missing_or_loading=1 moving_limit=1 idle_max=4" % _dm9_visual_worker_limit)
 	if _dm9_visual_worker_limit > 1:
@@ -452,6 +456,7 @@ func _ready() -> void:
 			"dm9_prefetch_enabled": _dm9_prefetch_enabled,
 			"dm9_visual_worker_limit": _dm9_visual_worker_limit,
 			"dm9_visual_adaptive": _dm9_visual_adaptive,
+			"dm9_fast_b4": _dm9_fast_b4,
 			"snapshot_budget_usec": MESH_SNAPSHOT_FRAME_BUDGET_USEC,
 			"upload_budget_usec": MESH_UPLOAD_FRAME_BUDGET_USEC,
 		})
@@ -1110,6 +1115,7 @@ func _stream_finish_frame() -> void:
 		"dm9_visual_worker_limit": _dm9_visual_worker_limit,
 		"dm9_visual_worker_effective_limit": _dm9_visual_worker_effective_limit,
 		"dm9_visual_adaptive": _dm9_visual_adaptive,
+		"dm9_fast_b4": _dm9_fast_b4,
 		"dm9_visual_workers_in_flight": _dm3_shell_jobs.size(),
 		"dm9_visual_started_total": _dm9_shell_started_total,
 		"dm9_visual_completed_total": _dm9_shell_completed_total,
@@ -5177,6 +5183,13 @@ func _dm3_process_shells() -> void:
 					"worker_queue_usec": dm9_shell_queue_usec,
 					"worker_run_usec": dm9_shell_run_usec,
 					"field_generate_usec": int(cpu.get("field_generate_usec", 0)),
+					"precompute_usec": int(cpu.get("precompute_usec", 0)),
+					"lattice_usec": int(cpu.get("lattice_usec", 0)),
+					"cell_rebuild_usec": int(cpu.get("cell_rebuild_usec", 0)),
+					"uniform_cells_skipped": int(cpu.get("uniform_cells_skipped", 0)),
+					"chunk_build_usec": int(cpu.get("chunk_build_usec", 0)),
+					"chunk_combine_usec": int(cpu.get("chunk_combine_usec", 0)),
+					"fast_pristine": bool(cpu.get("fast_pristine", false)),
 					"surface_mesh_usec": int(cpu.get("surface_mesh_usec", 0)),
 					"main_thread_publish_usec": Time.get_ticks_usec() - dm9_shell_publish_started_usec,
 					"in_flight": _dm3_shell_jobs.size(),
@@ -5240,7 +5253,7 @@ func _dm3_process_shells() -> void:
 			continue
 		if now < int(_dm3_shell_retry_after_usec.get(id, 0)):
 			continue
-		var job := DM3VisualJob.new(world_seed, key, desired_lod)
+		var job := DM3VisualJob.new(world_seed, key, desired_lod, _dm9_fast_b4)
 		var task_id := WorkerThreadPool.add_task(
 			Callable(job, "run"), false, "DM3 derived region halo"
 		)
