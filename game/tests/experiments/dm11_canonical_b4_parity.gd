@@ -103,8 +103,8 @@ func _compare(
 		new_mesh.get("normals", PackedVector3Array()), label + " exact mesh normals")
 	_check(old_mesh.get("sample_count", -1) == new_mesh.get("sample_count", -2),
 		label + " exact sampling sites")
-	_check(optimized.last_canonical_fast_sdf == (label == "pristine"),
-		label + " pristine cache only; never bypass authoritative modifications")
+	_check(optimized.last_canonical_fast_sdf,
+		label + " exact cached base SDF and prepared snapshot composition")
 	var receipt := {
 		"label": label, "seed": seed, "region": [region.x, region.y],
 		"chunk": [coord.x, coord.y],
