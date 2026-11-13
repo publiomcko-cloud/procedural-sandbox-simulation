@@ -14,6 +14,7 @@ var result: Dictionary = {}
 var started_usec := 0
 var finished_usec := 0
 var fast_pristine := false
+var worker_thread_id := 0
 
 
 func _init(world_seed: int, region_key: Vector2i, level: int = 0, enable_fast: bool = false) -> void:
@@ -25,6 +26,7 @@ func _init(world_seed: int, region_key: Vector2i, level: int = 0, enable_fast: b
 
 
 func run() -> void:
+	worker_thread_id = OS.get_thread_caller_id()
 	started_usec = Time.get_ticks_usec()
 	result = build_data(seed, region, lod, fast_pristine)
 	finished_usec = Time.get_ticks_usec()
