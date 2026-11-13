@@ -1,0 +1,126 @@
+name: DM14 effect-window phase attribution
+
+on:
+  push:
+    branches:
+      - exp/dm14-effect-window-stages
+  workflow_dispatch:
+
+concurrency:
+  group: dm14-effect-stages-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 55
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+      SANDBOX_TERRAIN_BACKEND: b4
+      SANDBOX_DM9_FAST_B4: '1'
+      SANDBOX_DM9_PREFETCH: '0'
+      SANDBOX_DM9_VISUAL_ADAPTIVE: '1'
+      SANDBOX_DM9_VISUAL_WORKERS: '4'
+      SANDBOX_DM11_CANONICAL_FAST_B4: '1'
+      SANDBOX_DM11_VISUAL_LANE: '0'
+      SANDBOX_DM12_SURFACE_SLICE: '1'
+      SANDBOX_DM12_FRAME_TRACE: '0'
+      SANDBOX_DM13_WATER_WORKERS: '1'
+      SANDBOX_DM13_WATER_NATIVE: '1'
+      SANDBOX_DM14_EFFECT_TRACE: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Import and parse effect runtime
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          & $env:GODOT_BIN --headless --editor --path .\game --import
+          if ($LASTEXITCODE -ne 0) { throw 'DM14 import failed' }
+          & $env:GODOT_BIN --headless --path .\game --check-only --script res://scripts/terrain/terrain_object_effect_runtime.gd
+          if ($LASTEXITCODE -ne 0) { throw 'DM14 effect runtime parse failed' }
+          Write-Host 'DM14_PARSE_PASS'
+      - name: Projection and effect lifecycle regression
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        timeout-minutes: 20
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'dm14-contract'
+          New-Item -Path $root -ItemType Directory -Force | Out-Null
+          foreach ($case in @(
+            @{name='d4-1'; file='res://tests/issue108_d4_1_dormant_projection_scope_cache_tests.gd'; receipt='ISSUE108_D4_1'},
+            @{name='d7-3'; file='res://tests/issue108_d7_3_projection_source_cache_tests.gd'; receipt='ISSUE108_D7_3'}
+          )) {
+            $out = & $env:GODOT_BIN --headless --path .\game --script $case.file 2>&1 | Out-String
+            $out | Set-Content (Join-Path $root "$($case.name).log") -Encoding UTF8
+            Write-Host $out
+            if ($LASTEXITCODE -ne 0 -or $out -match 'FAIL:|SCRIPT ERROR:|Parse Error:' -or
+                -not $out.Contains($case.receipt)) {
+              throw "DM14 regression failed: $($case.name)"
+            }
+          }
+          Write-Host 'DM14_REGRESSION_PASS'
+      - name: Reproducible DM13-based effect-window phase attribution at 18mps
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        timeout-minutes: 25
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'dm14-effect-stages'
+          & .\scripts\perf\run-p5-deterministic-stream-benchmark.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $dir -Frames 960 -Routes @('outback-18') -Profiles @('adaptive-skip-progressive') -CaptureProcessCpu
+          $file = Join-Path $dir '01-outback-18-adaptive-skip-progressive.stdout.log'
+          $events = @()
+          foreach ($line in Get-Content -LiteralPath $file) {
+            if (-not $line.Contains('"event":"dm14_effect_window_stages"')) { continue }
+            $pos = $line.IndexOf('PERF_TRACE ')
+            if ($pos -lt 0) { continue }
+            $events += ($line.Substring($pos + 11) | ConvertFrom-Json)
+          }
+          if ($events.Count -lt 3) { throw "DM14 missing effect-window stage samples: $($events.Count)" }
+          $fields = @(
+            'normalize_usec','required_usec','priority_sort_usec',
+            'protected_set_usec','prefetch_filter_usec','loaded_enumeration_usec',
+            'eviction_parse_usec','eviction_release_usec','prefetch_enqueue_usec'
+          )
+          $receipt = [ordered]@{
+            event_count = $events.Count
+            total_duration_ms = [Math]::Round((($events | ForEach-Object { [double]$_.window_duration_usec } | Measure-Object -Sum).Sum / 1000.0), 3)
+            max_duration_ms = [Math]::Round((($events | ForEach-Object { [double]$_.window_duration_usec } | Measure-Object -Maximum).Maximum / 1000.0), 3)
+            phases = [ordered]@{}
+            top_heavy = @()
+          }
+          foreach ($field in $fields) {
+            $samples = @($events | ForEach-Object { [double]($_.$field) / 1000.0 })
+            $receipt.phases[$field] = [ordered]@{
+              sum_ms = [Math]::Round(($samples | Measure-Object -Sum).Sum, 3)
+              max_ms = [Math]::Round(($samples | Measure-Object -Maximum).Maximum, 3)
+            }
+          }
+          $receipt.top_heavy = @($events | Sort-Object { [double]$_.window_duration_usec } -Descending |
+            Select-Object -First 8 | ForEach-Object {
+              [ordered]@{
+                total_ms = [Math]::Round([double]$_.window_duration_usec / 1000.0, 3)
+                protected = $_.required_count
+                evicted = $_.evicted_now
+                priority_ms = [Math]::Round([double]$_.priority_sort_usec / 1000.0, 3)
+                release_ms = [Math]::Round([double]$_.eviction_release_usec / 1000.0, 3)
+                enqueue_ms = [Math]::Round([double]$_.prefetch_enqueue_usec / 1000.0, 3)
+                filter_ms = [Math]::Round([double]$_.prefetch_filter_usec / 1000.0, 3)
+              }
+            })
+          $receipt | ConvertTo-Json -Depth 9 | Set-Content (Join-Path $dir 'dm14-effect-summary.json') -Encoding UTF8
+          Write-Host ('DM14_EFFECT_WINDOW_RESULT=' + ($receipt | ConvertTo-Json -Compress -Depth 9))
+          Write-Host 'DM14_EFFECT_ATTRIBUTION_PASS'
+      - name: Preserve source snapshots and trace receipts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm14-effect-stages
+          path: |
+            ${{ runner.temp }}\dm14-contract\*.log
+            ${{ runner.temp }}\dm14-effect-stages\*.log
+            ${{ runner.temp }}\dm14-effect-stages\*.json
+          retention-days: 14
+          if-no-files-found: warn
