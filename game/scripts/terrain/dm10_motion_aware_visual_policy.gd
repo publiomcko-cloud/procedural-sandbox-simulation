@@ -30,6 +30,7 @@ static func plan(
 		"may_submit": false,
 		"interval_usec": 0,
 		"canonical_pressure": not core_ready or canonical_loading > 0 or canonical_mesh_jobs > 0,
+		"core_ready": core_ready,
 	}
 	if not is_finite(speed_mps) or speed_mps < 0.0 \
 		or not is_finite(frame_ms) or not is_finite(process_ms):
