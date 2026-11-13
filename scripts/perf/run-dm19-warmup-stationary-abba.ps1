@@ -90,7 +90,7 @@ try {
                 $d = $s.dm19_cold
                 if ([int]$d.effect.calls -lt 1 -or
                      [int]$d.dispatch_frames.budget_one + [int]$d.dispatch_frames.budget_two -ne $frames -or
-                     $d.stage_groups.first_visit.published -eq $null)) {
+                     $d.stage_groups.first_visit.published -eq $null) {
                     throw "DM19_WARMUP_DIAGNOSTIC_INCOMPLETE $trial"
                 }
                 $e = $s.dm19_effect_runtime
