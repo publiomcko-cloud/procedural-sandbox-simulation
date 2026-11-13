@@ -83,3 +83,26 @@ $env:SANDBOX_PERF_TRACE = "1"
 ```
 
 **Fail-safe:** set `SANDBOX_DM11_CANONICAL_FAST_B4=0`; original canonical snapshot and geometry code remains accessible unchanged. `main` is untouched. Do not merge to main until visual/edited local QA and repeated A/B are accepted.
+
+## Final candidate qualification — DM11 canonical fast, shared visual pool
+
+**Workflow 43421950396:** exact canonical/DM2/DM9 mesh contracts PASS, six-trial same-seed A/B PASS, Windows interactive GTX 1050 Ti GPU smoke PASS. This tested `SANDBOX_DM11_CANONICAL_FAST_B4=1` with `SANDBOX_DM11_VISUAL_LANE=0`. It is the candidate recommended for **local visual QA**, but NOT a main merge or default rollout.
+
+The final repeated A/B (two new 18m/s runs each arm) reported:
+- Missing canonical 3×3 focus **69.375% baseline → 31.458% fast**.
+- Canonical region p95 **2471.97ms → 1698.16ms** (mean of per-run p95).
+- Visual HIGH exterior regions completed **47 → 72**, approximately **53% more**.
+- Frames >33ms **2.774% → 3.260%**, a small but measurable frame-tail regression in this specific pair, so no claim of smoother frame times.
+- Idle full 277-region HIGH coverage **15.998s → 14.607s**, with all 268 exterior regions completed, 0 gaps; idle CPU avg **4.36% → 3.30%**.
+
+Across the one prepared-snapshot factorial A/B in workflow 43421101767 plus two new repeated pairs in 43421950396 (three matching headless motion trials per arm, not an independent statistical performance guarantee):
+| Metric, mean across runs | Original canonical | Prepared canonical fast, shared visual pool |
+|---|---:|---:|
+| Missing canonical focus | 71.852% | **29.768%** |
+| Canonical region p95 | 2350.4ms | **1654.0ms** |
+| Visual HIGH exterior regions completed | 46.7 | **74.7** |
+| Frames >33ms | 2.913% | **3.190%** |
+
+**Decision:** `DM11_CANONICAL_FAST_VISUAL_QA_CANDIDATE`: major consistent improvement in canonical and visual region throughput, verified exact edited/effected/materialized/cave geometry and real GPU smoke, but an average +0.277 percentage-point regression in >33ms frames. Retain default `SANDBOX_DM11_CANONICAL_FAST_B4=0` until a local user-run visual test accepts it. Native visual `Thread.PRIORITY_LOW` lane stays `0` (experiment functional but not overall superior). Future work: instrument the exact source of main-thread frame spikes and optimize region/chunk publication pacing without starving canonical stages.
+
+The code is entirely opt-in; no authoritative layout, cache key, ledger revision, save format, mod-first content, B4 sample step, radial HIGH distance, or object geometry was changed.
