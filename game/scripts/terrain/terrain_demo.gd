@@ -427,7 +427,7 @@ func _ready() -> void:
 	if _dm9_fast_b4:
 		print("DM9_FAST_B4: enabled=1 pristine_visual_only=1 authoritative_backend_unchanged=1")
 	var qos_request := OS.get_environment("SANDBOX_DM10_VISUAL_QOS").to_lower().strip_edges()
-	if _dm3_enabled() and qos_request in ["balanced", "guarded"]:
+	if _dm3_enabled() and qos_request in ["balanced", "guarded", "corridor"]:
 		_dm10_visual_qos = qos_request
 		print("DM10_VISUAL_QOS: mode=%s canonical_first=1 directional_priority=velocity high_fast_b4=%d" % [_dm10_visual_qos, int(_dm9_fast_b4)])
 	elif qos_request != "" and qos_request != "off":
