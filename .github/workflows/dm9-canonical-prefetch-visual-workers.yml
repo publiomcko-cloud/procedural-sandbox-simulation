@@ -87,7 +87,7 @@ jobs:
           foreach ($variant in $sequence) {
             $mode = $variant.Substring(0,1)
             $env:SANDBOX_DM9_PREFETCH = '0'
-            $env:SANDBOX_DM9_VISUAL_WORKERS = if ($mode -eq 'E') { '8' } else { '1' }
+            $env:SANDBOX_DM9_VISUAL_WORKERS = if ($mode -eq 'E') { '4' } else { '1' }
             $env:SANDBOX_DM9_VISUAL_ADAPTIVE = if ($mode -eq 'E') { '1' } else { '0' }
             $dir = Join-Path $root $variant
             & .\scripts\perf\run-p5-deterministic-stream-benchmark.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $dir -Frames 720 -Routes @('outback-18') -Profiles @('adaptive-skip-progressive') -CaptureProcessCpu
@@ -150,7 +150,7 @@ jobs:
       GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
       SANDBOX_TERRAIN_BACKEND: b4
       SANDBOX_DM9_PREFETCH: '0'
-      SANDBOX_DM9_VISUAL_WORKERS: '8'
+      SANDBOX_DM9_VISUAL_WORKERS: '4'
       SANDBOX_DM9_VISUAL_ADAPTIVE: '1'
     steps:
       - uses: actions/checkout@v7
@@ -158,26 +158,33 @@ jobs:
           clean: true
           fetch-depth: 1
           persist-credentials: false
-      - name: Import and record extended stationary fill/visual queue pressure
+      - name: Compare stationary baseline 1 worker versus adaptive 4 workers
         shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
         timeout-minutes: 40
         run: |
           & $env:GODOT_BIN --headless --editor --path .\game --import
           if ($LASTEXITCODE -ne 0) { throw 'DM9 idle import failed' }
-          $dir = Join-Path $env:RUNNER_TEMP 'dm9-idle'
-          & .\scripts\perf\run-p5-deterministic-stream-benchmark.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $dir -Frames 3600 -Routes @('idle') -Profiles @('adaptive-skip-progressive') -CaptureProcessCpu
-          $m = Get-Content (Join-Path $dir '01-idle-adaptive-skip-progressive.metrics.json') -Raw | ConvertFrom-Json
-          Write-Host ('DM9_IDLE_PRESSURE_RESULT=' + ($m | ConvertTo-Json -Depth 8 -Compress))
-          if ($m.requested_frames -ne 3600 -or $m.seed -ne 424242) { throw 'DM9 idle benchmark mismatch' }
-          Write-Host 'DM9_IDLE_PRESSURE_PASS'
+          $root = Join-Path $env:RUNNER_TEMP 'dm9-idle'
+          $results = @()
+          foreach ($variant in @('A','E')) {
+            $env:SANDBOX_DM9_VISUAL_WORKERS = if ($variant -eq 'E') { '4' } else { '1' }
+            $env:SANDBOX_DM9_VISUAL_ADAPTIVE = if ($variant -eq 'E') { '1' } else { '0' }
+            $dir = Join-Path $root $variant
+            & .\scripts\perf\run-p5-deterministic-stream-benchmark.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $dir -Frames 3600 -Routes @('idle') -Profiles @('adaptive-skip-progressive') -CaptureProcessCpu
+            $m = Get-Content (Join-Path $dir '01-idle-adaptive-skip-progressive.metrics.json') -Raw | ConvertFrom-Json
+            if ($m.requested_frames -ne 3600 -or $m.seed -ne 424242 -or $m.process_cpu_samples -lt 5) { throw "DM9 idle benchmark mismatch $variant" }
+            $results += [ordered]@{ variant=$variant; visual_completed=$m.dm9_visual_shell_complete_count; radial_gap_final=$m.dm8_visual_gap_final_regions; cpu_avg=$m.process_cpu_mean_pct_total_capacity; cpu_peak=$m.process_cpu_peak_pct_total_capacity; frame_avg=$m.avg_frame_ms; frames_over_20_pct=$m.frames_over_20_ms_pct; frames_over_33_pct=$m.frames_over_33_ms_pct; worker_p95_ms=$m.dm9_visual_shell_worker_p95_ms; field_p95_ms=$m.dm9_visual_field_generate_p95_ms; meshing_p95_ms=$m.dm9_visual_chunk_meshing_p95_ms; rss_peak_mb=$m.process_rss_peak_mb }
+          }
+          Write-Host ('DM9_IDLE_COMPARISON_RESULT=' + ($results | ConvertTo-Json -Depth 7 -Compress))
+          Write-Host 'DM9_IDLE_COMPARISON_PASS'
       - name: Upload extended idle evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: dm9-idle-pressure
           path: |
-            ${{ runner.temp }}\dm9-idle\*.log
-            ${{ runner.temp }}\dm9-idle\*.json
+            ${{ runner.temp }}\dm9-idle\**\*.log
+            ${{ runner.temp }}\dm9-idle\**\*.json
           retention-days: 14
           if-no-files-found: warn
 
@@ -189,7 +196,7 @@ jobs:
       GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
       SANDBOX_TERRAIN_BACKEND: b4
       SANDBOX_DM9_PREFETCH: '0'
-      SANDBOX_DM9_VISUAL_WORKERS: '8'
+      SANDBOX_DM9_VISUAL_WORKERS: '4'
       SANDBOX_DM9_VISUAL_ADAPTIVE: '1'
     steps:
       - uses: actions/checkout@v7
