@@ -1,0 +1,209 @@
+name: DM11 canonical B4 and isolated visual lane qualification
+
+on:
+  push:
+    branches:
+      - exp/dm11-canonical-b4-and-visual-lane
+  workflow_dispatch:
+
+concurrency:
+  group: dm11-b4-lane-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 35
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+      SANDBOX_DM11_CANONICAL_FAST_B4: '0'
+      SANDBOX_DM11_VISUAL_LANE: '0'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Godot import and parse all touched runtime paths
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          & $env:GODOT_BIN --headless --editor --path .\game --import
+          if ($LASTEXITCODE -ne 0) { throw 'Godot import failed' }
+          foreach ($file in @(
+            'res://scripts/experiments/discrete_surface_nets_backend.gd',
+            'res://scripts/terrain/terrain_mesh_job.gd',
+            'res://scripts/terrain/terrain_demo.gd',
+            'res://scripts/experiments/b4_region_visual_job.gd',
+            'res://tests/experiments/dm11_canonical_b4_parity.gd'
+          )) {
+            & $env:GODOT_BIN --headless --path .\game --check-only --script $file
+            if ($LASTEXITCODE -ne 0) { throw "GDScript parse failure: $file" }
+          }
+      - name: Exact all-snapshot B4 canonical lattice and topology parity
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        timeout-minutes: 17
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'dm11-contract'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          foreach ($case in @(
+            @{name='dm11-parity'; script='res://tests/experiments/dm11_canonical_b4_parity.gd'; receipt='DM11_CANONICAL_PARITY_PASS'},
+            @{name='dm2-regression'; script='res://tests/experiments/dm2_b4_chunk_contract.gd'; receipt='DM2_B4_CHUNK_PASS'},
+            @{name='dm9-visual'; script='res://tests/experiments/dm9_b4_hotpath_parity_benchmark.gd'; receipt='DM9_B4_HOTPATH_PASS'}
+          )) {
+            $content = & $env:GODOT_BIN --headless --path .\game --script $case.script 2>&1 | Out-String
+            $content | Set-Content (Join-Path $dir "$($case.name).log") -Encoding UTF8
+            Write-Host $content
+            if ($LASTEXITCODE -ne 0 -or -not $content.Contains($case.receipt) -or $content.Contains('DM11_CANONICAL_FAIL:')) {
+              throw "DM11 contract failed: $($case.name)"
+            }
+          }
+          Write-Host 'DM11_CONTRACT_ALL_PASS'
+      - name: Preserve contract measurements
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm11-canonical-parity
+          path: ${{ runner.temp }}\dm11-contract\*.log
+          retention-days: 14
+          if-no-files-found: warn
+
+  factorial:
+    needs: contract
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 110
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+      SANDBOX_TERRAIN_BACKEND: b4
+      SANDBOX_DM9_PREFETCH: '0'
+      SANDBOX_DM9_VISUAL_ADAPTIVE: '1'
+      SANDBOX_DM9_VISUAL_WORKERS: '4'
+      SANDBOX_DM9_FAST_B4: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Eight same-seed canonical fast x visual isolation trials
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        timeout-minutes: 100
+        run: |
+          & $env:GODOT_BIN --headless --editor --path .\game --import
+          if ($LASTEXITCODE -ne 0) { throw 'DM11 import failed' }
+          $root = Join-Path $env:RUNNER_TEMP 'dm11-factorial'
+          $cases = @(
+            @{label='A-motion'; route='outback-18'; frames=720; fast='0'; lane='0'},
+            @{label='B-motion'; route='outback-18'; frames=720; fast='1'; lane='0'},
+            @{label='C-motion'; route='outback-18'; frames=720; fast='0'; lane='1'},
+            @{label='D-motion'; route='outback-18'; frames=720; fast='1'; lane='1'},
+            @{label='A-idle'; route='idle'; frames=3600; fast='0'; lane='0'},
+            @{label='D-idle'; route='idle'; frames=3600; fast='1'; lane='1'},
+            @{label='D-motion2'; route='outback-18'; frames=720; fast='1'; lane='1'},
+            @{label='A-motion2'; route='outback-18'; frames=720; fast='0'; lane='0'}
+          )
+          $summary = @()
+          foreach ($case in $cases) {
+            $env:SANDBOX_DM11_CANONICAL_FAST_B4 = $case.fast
+            $env:SANDBOX_DM11_VISUAL_LANE = $case.lane
+            $dir = Join-Path $root $case.label
+            & .\scripts\perf\run-p5-deterministic-stream-benchmark.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $dir -Frames $case.frames -Routes @($case.route) -Profiles @('adaptive-skip-progressive') -CaptureProcessCpu
+            $m = Get-Content (Join-Path $dir "01-$($case.route)-adaptive-skip-progressive.metrics.json") -Raw | ConvertFrom-Json
+            if ($m.requested_frames -ne $case.frames -or [int]$m.seed -ne 424242 -or
+                [bool]$m.dm11_visual_lane_enabled -ne ($case.lane -eq '1') -or
+                [bool]$m.dm11_canonical_fast_b4_enabled -ne ($case.fast -eq '1')) {
+              throw "DM11 invariant mismatch: $($case.label)"
+            }
+            if ($case.lane -eq '1' -and [int]$m.dm11_visual_lane_completions -eq 0) {
+              throw "DM11 native visual lane never completed a task: $($case.label)"
+            }
+            $record = [ordered]@{
+              variant=$case.label; canonical_fast=$case.fast; native_visual_lane=$case.lane;
+              frames=$case.frames;
+              canonical_focus_missing_pct=$m.f10_focus_missing_pct;
+              canonical_p95_ms=$m.region_load_p95_ms;
+              canonical_worker_queue_p95_ms=$m.worker_queue_p95_ms;
+              canonical_worker_run_p95_ms=$m.worker_run_p95_ms;
+              canonical_sample_p50_ms=$m.dm11_canonical_sample_p50_ms;
+              canonical_cell_p50_ms=$m.dm11_canonical_cell_p50_ms;
+              canonical_mesh_p50_ms=$m.dm11_canonical_mesh_p50_ms;
+              canonical_pristine_cache_hits=$m.dm11_canonical_pristine_cache_hits;
+              visual_high_completed=$m.dm9_visual_shell_complete_count;
+              visual_queue_p95_ms=$m.dm9_visual_shell_queue_p95_ms;
+              native_lane_completions=$m.dm11_visual_lane_completions;
+              outer_high_gap_final=$m.dm8_visual_gap_final_regions;
+              full_high_elapsed_ms=$m.dm9_full_high_elapsed_ms;
+              frames_over_33_ms_pct=$m.frames_over_33_ms_pct;
+              frames_over_20_ms_pct=$m.frames_over_20_ms_pct;
+              mean_frame_ms=$m.avg_frame_ms;
+              cpu_mean_pct=$m.process_cpu_mean_pct_total_capacity;
+              cpu_peak_pct=$m.process_cpu_peak_pct_total_capacity;
+              rss_peak_mb=$m.process_rss_peak_mb;
+            }
+            $summary += $record
+            Write-Host ('DM11_FACTORIAL_CASE=' + ($record | ConvertTo-Json -Compress -Depth 6))
+          }
+          $summary | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $root 'dm11-factorial-summary.json') -Encoding UTF8
+          Write-Host ('DM11_FACTORIAL_RESULT=' + ($summary | ConvertTo-Json -Compress -Depth 8))
+          Write-Host 'DM11_FACTORIAL_PASS'
+      - name: Preserve raw trace and performance receipts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm11-factorial-ab
+          path: |
+            ${{ runner.temp }}\dm11-factorial\**\*.log
+            ${{ runner.temp }}\dm11-factorial\**\*.json
+          retention-days: 14
+          if-no-files-found: warn
+
+  gpu:
+    needs: factorial
+    runs-on: [self-hosted, Windows, X64, gpu-interactive]
+    timeout-minutes: 30
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+      SANDBOX_TERRAIN_BACKEND: b4
+      SANDBOX_DM9_PREFETCH: '0'
+      SANDBOX_DM9_VISUAL_ADAPTIVE: '1'
+      SANDBOX_DM9_VISUAL_WORKERS: '4'
+      SANDBOX_DM9_FAST_B4: '1'
+      SANDBOX_DM11_VISUAL_LANE: '1'
+      SANDBOX_DM11_CANONICAL_FAST_B4: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Real interactive GPU preflight
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          & .\scripts\ci\p5-gpu-session-preflight.ps1 -Role Interactive
+      - name: Native low-priority visual lane with canonical B4 GPU smoke
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        timeout-minutes: 20
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'dm11-gpu'
+          & .\scripts\perf\run-p5-gpu-smoke.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $dir -Frames 360 -Routes @('straight-18') -StreamProfile 'adaptive-skip-progressive'
+          if ($LASTEXITCODE -ne 0) { throw 'DM11 GPU smoke failed' }
+          $log = Get-Content (Join-Path $dir 'gpu-straight-18.stdout.log') -Raw
+          if (-not $log.Contains('DM11_VISUAL_LANE: isolated_native_threads=1') -or
+              -not $log.Contains('"event":"dm4_region_b4_high_visible"') -or
+              -not $log.Contains('"dm11_visual_lane":"native_low"')) {
+            throw 'DM11 GPU visual thread isolation evidence not observed'
+          }
+          Write-Host 'DM11_GPU_PASS'
+      - name: Preserve GUI/GPU evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm11-gpu
+          path: |
+            ${{ runner.temp }}\dm11-gpu\*.png
+            ${{ runner.temp }}\dm11-gpu\*.log
+            ${{ runner.temp }}\dm11-gpu\*.json
+          retention-days: 14
+          if-no-files-found: warn
