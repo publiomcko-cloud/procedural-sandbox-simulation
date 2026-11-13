@@ -1,0 +1,115 @@
+name: DM15 effect release microstages root-cause
+on:
+  push:
+    branches:
+      - exp/dm15-release-scope-hotpath
+  workflow_dispatch:
+
+concurrency:
+  group: dm15-release-profile-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+
+jobs:
+  trace:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 35
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+      SANDBOX_TERRAIN_BACKEND: b4
+      SANDBOX_DM9_FAST_B4: '1'
+      SANDBOX_DM9_PREFETCH: '0'
+      SANDBOX_DM9_VISUAL_ADAPTIVE: '1'
+      SANDBOX_DM9_VISUAL_WORKERS: '4'
+      SANDBOX_DM11_CANONICAL_FAST_B4: '1'
+      SANDBOX_DM11_VISUAL_LANE: '0'
+      SANDBOX_DM12_SURFACE_SLICE: '1'
+      SANDBOX_DM12_FRAME_TRACE: '0'
+      SANDBOX_DM13_WATER_WORKERS: '1'
+      SANDBOX_DM13_WATER_NATIVE: '1'
+      SANDBOX_DM14_DENSE_REQUIRED: '1'
+      SANDBOX_DM14_EFFECT_TRACE: '0'
+      SANDBOX_DM15_RELEASE_TRACE: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Strict Godot parse
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          & $env:GODOT_BIN --headless --editor --path .\game --import
+          if ($LASTEXITCODE -ne 0) { throw 'DM15 import failed' }
+          foreach ($file in @(
+            'res://scripts/terrain/terrain_object_effect_projection_service.gd',
+            'res://scripts/terrain/terrain_object_effect_runtime.gd',
+            'res://scripts/terrain/terrain_demo.gd'
+          )) {
+            & $env:GODOT_BIN --headless --path .\game --check-only --script $file
+            if ($LASTEXITCODE -ne 0) { throw "DM15 parse failed: $file" }
+          }
+          Write-Host 'DM15_PARSE_PASS'
+      - name: Same-seed release phase breakdown with lazy OFF and ON
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        timeout-minutes: 28
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'dm15-release'
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          $receipts = @()
+          foreach ($mode in @('0','1')) {
+            $env:SANDBOX_DM14_LAZY_ROUTES = $mode
+            $dir = Join-Path $root ("lazy-" + $mode)
+            & .\scripts\perf\run-p5-deterministic-stream-benchmark.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $dir -Frames 960 -Routes @('outback-18') -Profiles @('adaptive-skip-progressive')
+            if ($LASTEXITCODE -ne 0) { throw "DM15 benchmark failed for lazy $mode" }
+            $name = '01-outback-18-adaptive-skip-progressive'
+            $lines = Get-Content -LiteralPath (Join-Path $dir "$name.stdout.log")
+            $events = @()
+            foreach ($line in $lines) {
+              if (-not $line.Contains('"event":"dm15_effect_release_detail"')) { continue }
+              $i = $line.IndexOf('PERF_TRACE ')
+              if ($i -ge 0) { $events += ($line.Substring($i + 11) | ConvertFrom-Json) }
+            }
+            if ($events.Count -lt 15) { throw "DM15 release detail absent: $mode ($($events.Count))" }
+            $phases = [ordered]@{}
+            foreach ($field in @('total_usec','route_usec','enqueue_usec','route_enumerate_usec',
+              'route_unlink_usec','scope_map_erase_usec','dormant_usec','counter_usec')) {
+              $values = @($events | ForEach-Object { [double]($_.$field) / 1000.0 })
+              $phases[$field] = [ordered]@{
+                sum_ms = [Math]::Round(($values | Measure-Object -Sum).Sum, 3);
+                max_ms = [Math]::Round(($values | Measure-Object -Maximum).Maximum, 3);
+              }
+            }
+            $heavy = @($events | Sort-Object { [double]$_.total_usec } -Descending |
+              Select-Object -First 8 | ForEach-Object {
+                [ordered]@{
+                  scope=$_.scope_id;
+                  total_ms=[Math]::Round([double]$_.total_usec / 1000.0, 3);
+                  route_ms=[Math]::Round([double]$_.route_usec / 1000.0, 3);
+                  dormant_ms=[Math]::Round([double]$_.dormant_usec / 1000.0, 3);
+                  effects=$_.effect_count;
+                  route_keys=$_.route_key_count;
+                  lazy_queued=$_.queued_lazy;
+                }
+              })
+            $receipt = [ordered]@{
+              lazy=$mode; count=$events.Count; queued=@($events | Where-Object { $_.queued_lazy }).Count;
+              phases=$phases; heavy=$heavy;
+              dormant_trace_lines=@($lines | Where-Object { $_.Contains('"event":"effect_scope_dormant_store"') }).Count;
+            }
+            $receipts += $receipt
+            Write-Host ('DM15_RELEASE_PROFILE=' + ($receipt | ConvertTo-Json -Depth 9 -Compress))
+          }
+          $receipts | ConvertTo-Json -Depth 9 | Set-Content (Join-Path $root 'dm15-release-profile.json') -Encoding UTF8
+          Write-Host 'DM15_RELEASE_PROFILE_PASS'
+      - name: Retain exact A/B evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm15-release-profile
+          path: |
+            ${{ runner.temp }}\dm15-release\**\*.log
+            ${{ runner.temp }}\dm15-release\**\*.json
+          retention-days: 14
+          if-no-files-found: warn
