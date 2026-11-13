@@ -1,0 +1,257 @@
+name: DM15 dormant telemetry rollup exactness and paired frame tails
+on:
+  push:
+    branches:
+      - exp/dm15-dormant-telemetry-rollup
+  workflow_dispatch:
+
+concurrency:
+  group: dm15-dormant-rollup-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+
+jobs:
+  exact:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 30
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+      SANDBOX_DM14_DENSE_REQUIRED: '1'
+      SANDBOX_DM14_LAZY_ROUTES: '0'
+      SANDBOX_DM15_DORMANT_ROLLUP: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Godot import and strict syntax validation
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          & $env:GODOT_BIN --headless --editor --path .\game --import
+          if ($LASTEXITCODE -ne 0) { throw 'DM15 import failed' }
+          foreach ($file in @(
+            'res://scripts/terrain/terrain_object_effect_projection_service.gd',
+            'res://scripts/terrain/terrain_object_effect_runtime.gd',
+            'res://scripts/terrain/terrain_demo.gd',
+            'res://tests/experiments/dm15_dormant_rollup_contract.gd'
+          )) {
+            & $env:GODOT_BIN --headless --path .\game --check-only --script $file
+            if ($LASTEXITCODE -ne 0) { throw "DM15 parse failed: $file" }
+          }
+          Write-Host 'DM15_ROLLUP_PARSE_PASS'
+      - name: Exact effect/source/route and LRU contract suites
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        timeout-minutes: 20
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'dm15-contract'
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          $ErrorActionPreference = 'Continue'
+          foreach ($case in @(
+            @{name='dm15-rollup'; script='res://tests/experiments/dm15_dormant_rollup_contract.gd'; receipt='DM15_DORMANT_ROLLUP_PASS'},
+            @{name='dm14-routes'; script='res://tests/experiments/dm14_lazy_route_cleanup_contract.gd'; receipt='DM14_ROUTE_CONTRACT_PASS'},
+            @{name='dm14-dense'; script='res://tests/experiments/dm14_effect_dense_window_contract.gd'; receipt='DM14_DENSE_CONTRACT_PASS'},
+            @{name='d4-dormant'; script='res://tests/issue108_d4_1_dormant_projection_scope_cache_tests.gd'; receipt='ISSUE108_D4_1_DORMANT_SCOPE_PASS'},
+            @{name='d7-sources'; script='res://tests/issue108_d7_3_projection_source_cache_tests.gd'; receipt='ISSUE108_D7_3_PROJECTION_SOURCE_CACHE_PASS'}
+          )) {
+            $output = & $env:GODOT_BIN --headless --path .\game --script $case.script 2>&1 | Out-String
+            $exitCode = $LASTEXITCODE
+            $output | Set-Content (Join-Path $root "$($case.name).log") -Encoding UTF8
+            Write-Host ("DM15_CONTRACT_CASE " + $case.name + " exit=" + $exitCode + " matched=" + $output.Contains($case.receipt))
+            if ($exitCode -ne 0 -or -not $output.Contains($case.receipt) -or
+                $output -match 'SCRIPT ERROR:|Parse Error:|DM15_DORMANT_ROLLUP_FAIL:|DM14_ROUTE_CONTRACT_FAIL:') {
+              Write-Host $output
+              throw "DM15 contract failure: $($case.name)"
+            }
+          }
+          Write-Host 'DM15_ROLLUP_CONTRACTS_PASS'
+      - name: Preserve parity logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm15-contract
+          path: ${{ runner.temp }}\dm15-contract\*.log
+          retention-days: 14
+          if-no-files-found: warn
+
+  ab:
+    needs: exact
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 90
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+      SANDBOX_TERRAIN_BACKEND: b4
+      SANDBOX_DM9_FAST_B4: '1'
+      SANDBOX_DM9_PREFETCH: '0'
+      SANDBOX_DM9_VISUAL_ADAPTIVE: '1'
+      SANDBOX_DM9_VISUAL_WORKERS: '4'
+      SANDBOX_DM11_CANONICAL_FAST_B4: '1'
+      SANDBOX_DM11_VISUAL_LANE: '0'
+      SANDBOX_DM12_SURFACE_SLICE: '1'
+      SANDBOX_DM12_FRAME_TRACE: '0'
+      SANDBOX_DM13_WATER_WORKERS: '1'
+      SANDBOX_DM13_WATER_NATIVE: '1'
+      SANDBOX_DM14_DENSE_REQUIRED: '1'
+      SANDBOX_DM14_LAZY_ROUTES: '0'
+      SANDBOX_DM14_EFFECT_TRACE: '0'
+      SANDBOX_DM15_RELEASE_TRACE: '0'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Same seed 18mps A/B and full HIGH stationary with tracing OFF
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        timeout-minutes: 70
+        run: |
+          & $env:GODOT_BIN --headless --editor --path .\game --import
+          if ($LASTEXITCODE -ne 0) { throw 'DM15 project import failed' }
+          $root = Join-Path $env:RUNNER_TEMP 'dm15-dormant-ab'
+          $cases = @(
+            @{label='A-motion'; route='outback-18'; frames=720; rollup='0'},
+            @{label='B-motion'; route='outback-18'; frames=720; rollup='1'},
+            @{label='B-idle'; route='idle'; frames=3600; rollup='1'},
+            @{label='A-idle'; route='idle'; frames=3600; rollup='0'},
+            @{label='B-motion2'; route='outback-18'; frames=720; rollup='1'},
+            @{label='A-motion2'; route='outback-18'; frames=720; rollup='0'}
+          )
+          $summary = @()
+          foreach ($case in $cases) {
+            $env:SANDBOX_DM15_DORMANT_ROLLUP = $case.rollup
+            $dir = Join-Path $root $case.label
+            & .\scripts\perf\run-p5-deterministic-stream-benchmark.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $dir -Frames $case.frames -Routes @($case.route) -Profiles @('adaptive-skip-progressive') -CaptureProcessCpu
+            if ($LASTEXITCODE -ne 0) { throw "DM15 benchmark process failed $($case.label)" }
+            $name = "01-$($case.route)-adaptive-skip-progressive"
+            $m = Get-Content (Join-Path $dir "$name.metrics.json") -Raw | ConvertFrom-Json
+            if ([int]$m.seed -ne 424242 -or [int]$m.requested_frames -ne $case.frames -or
+                -not [bool]$m.dm11_canonical_fast_b4_enabled) {
+              throw "DM15 metric invariants failed $($case.label)"
+            }
+            $lines = @(Get-Content (Join-Path $dir "$name.stdout.log"))
+            $perScope = @($lines | Where-Object { $_.Contains('"event":"effect_scope_dormant_store"') }).Count
+            $rollups = @($lines | Where-Object { $_.Contains('"event":"dm15_dormant_store_rollup"') }).Count
+            if ($case.rollup -eq '1' -and $perScope -ne 0) {
+              throw "DM15 rollup mode emitted per-scope event: $($case.label)"
+            }
+            if ($case.rollup -eq '0' -and $rollups -ne 0) {
+              throw "DM15 baseline generated rollup unexpectedly: $($case.label)"
+            }
+            if ($rollups + $perScope -lt 1) {
+              throw "DM15 no dormant source telemetry receipt: $($case.label)"
+            }
+            $receipt = [ordered]@{
+              name=$case.label; rollup=$case.rollup; frames=$case.frames;
+              frame33_pct=$m.frames_over_33_ms_pct;
+              frame20_pct=$m.frames_over_20_ms_pct;
+              avg_frame_ms=$m.avg_frame_ms;
+              canonical_focus_missing_pct=$m.f10_focus_missing_pct;
+              canonical_region_p95_ms=$m.region_load_p95_ms;
+              visual_high_completed=$m.dm9_visual_shell_complete_count;
+              full_high_elapsed_ms=$m.dm9_full_high_elapsed_ms;
+              cpu_mean_pct=$m.process_cpu_mean_pct_total_capacity;
+              dormant_per_scope_events=$perScope;
+              dormant_rollup_events=$rollups;
+            }
+            $summary += $receipt
+            Write-Host ('DM15_DORMANT_AB_CASE=' + ($receipt | ConvertTo-Json -Compress -Depth 6))
+          }
+          $summary | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $root 'dm15-dormant-ab-summary.json') -Encoding UTF8
+          Write-Host 'DM15_DORMANT_AB_PASS'
+      - name: Microprofile release hotpath with detailed tracing
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        timeout-minutes: 18
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'dm15-dormant-profile'
+          $env:SANDBOX_DM15_RELEASE_TRACE = '1'
+          foreach ($mode in @('0','1')) {
+            $env:SANDBOX_DM15_DORMANT_ROLLUP = $mode
+            $dir = Join-Path $root ('rollup-' + $mode)
+            & .\scripts\perf\run-p5-deterministic-stream-benchmark.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $dir -Frames 720 -Routes @('outback-18') -Profiles @('adaptive-skip-progressive')
+            if ($LASTEXITCODE -ne 0) { throw "DM15 profiling run failed: $mode" }
+            $events = @()
+            foreach ($line in Get-Content (Join-Path $dir '01-outback-18-adaptive-skip-progressive.stdout.log')) {
+              if (-not $line.Contains('"event":"dm15_effect_release_detail"')) { continue }
+              $pos = $line.IndexOf('PERF_TRACE ')
+              if ($pos -ge 0) { $events += ($line.Substring($pos + 11) | ConvertFrom-Json) }
+            }
+            if ($events.Count -lt 15) { throw "DM15 missing release detail: $mode" }
+            $receipt = [ordered]@{mode=$mode;count=$events.Count;phases=[ordered]@{}}
+            foreach ($field in @('total_usec','route_usec','dormant_usec','dormant_cache_mutation_usec','dormant_event_emit_usec')) {
+              $vals = @($events | ForEach-Object { [double]($_.$field) / 1000.0 })
+              $receipt.phases[$field] = [ordered]@{
+                sum_ms = [Math]::Round(($vals | Measure-Object -Sum).Sum, 3);
+                max_ms = [Math]::Round(($vals | Measure-Object -Maximum).Maximum, 3);
+              }
+            }
+            Write-Host ('DM15_DORMANT_PROFILE=' + ($receipt | ConvertTo-Json -Compress -Depth 7))
+          }
+          Write-Host 'DM15_DORMANT_PROFILE_PASS'
+      - name: Retain full paired A/B and microprofiles
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm15-dormant-ab
+          path: |
+            ${{ runner.temp }}\dm15-dormant-ab\**\*.log
+            ${{ runner.temp }}\dm15-dormant-ab\**\*.json
+            ${{ runner.temp }}\dm15-dormant-profile\**\*.log
+            ${{ runner.temp }}\dm15-dormant-profile\**\*.json
+          retention-days: 14
+          if-no-files-found: warn
+
+  gpu:
+    needs: ab
+    runs-on: [self-hosted, Windows, X64, gpu-interactive]
+    timeout-minutes: 30
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+      SANDBOX_TERRAIN_BACKEND: b4
+      SANDBOX_DM9_FAST_B4: '1'
+      SANDBOX_DM9_PREFETCH: '0'
+      SANDBOX_DM9_VISUAL_ADAPTIVE: '1'
+      SANDBOX_DM9_VISUAL_WORKERS: '4'
+      SANDBOX_DM11_CANONICAL_FAST_B4: '1'
+      SANDBOX_DM11_VISUAL_LANE: '0'
+      SANDBOX_DM12_SURFACE_SLICE: '1'
+      SANDBOX_DM13_WATER_WORKERS: '1'
+      SANDBOX_DM13_WATER_NATIVE: '1'
+      SANDBOX_DM14_DENSE_REQUIRED: '1'
+      SANDBOX_DM14_LAZY_ROUTES: '0'
+      SANDBOX_DM15_DORMANT_ROLLUP: '1'
+      SANDBOX_DM15_RELEASE_TRACE: '0'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Interactive Windows GPU preflight
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          & .\scripts\ci\p5-gpu-session-preflight.ps1 -Role Interactive
+      - name: Full HIGH scene plus effect dormant rollups on real GPU
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        timeout-minutes: 20
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'dm15-dormant-gpu'
+          & .\scripts\perf\run-p5-gpu-smoke.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $dir -Frames 360 -Routes @('straight-18') -StreamProfile 'adaptive-skip-progressive'
+          if ($LASTEXITCODE -ne 0) { throw 'DM15 GPU smoke failed' }
+          $out = Get-Content (Join-Path $dir 'gpu-straight-18.stdout.log') -Raw
+          if (-not $out.Contains('"event":"dm4_region_b4_high_visible"') -or
+              -not $out.Contains('"event":"effect_window_update"')) {
+            throw 'DM15 interactive GPU lacks HIGH or effect window receipts'
+          }
+          Write-Host 'DM15_GPU_PASS'
+      - name: Save GPU evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm15-dormant-gpu
+          path: |
+            ${{ runner.temp }}\dm15-dormant-gpu\*.log
+            ${{ runner.temp }}\dm15-dormant-gpu\*.json
+            ${{ runner.temp }}\dm15-dormant-gpu\*.png
+          retention-days: 14
+          if-no-files-found: warn
