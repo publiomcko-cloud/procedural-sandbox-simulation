@@ -4999,7 +4999,7 @@ func _dm8_sample_gap_pressure(now: int) -> void:
 			if direction.length_squared() > 0.000001 and facing.length_squared() > 0.000001:
 				if direction.normalized().dot(facing.normalized()) > 0.5:
 					front_gap_count += 1
-			if not _dm10_visual_qos.is_empty() and _last_f10_speed_mps > DM10VisualPolicy.SLOW_MPS:
+			if _last_f10_speed_mps > DM10VisualPolicy.SLOW_MPS:
 				var velocity_axis := Vector2(_dm10_velocity.x, _dm10_velocity.z)
 				if direction.length_squared() > 0.000001 and velocity_axis.length_squared() > 0.000001:
 					if direction.normalized().dot(velocity_axis.normalized()) > 0.5:
@@ -5030,7 +5030,7 @@ func _dm8_sample_gap_pressure(now: int) -> void:
 		"terrain_gap_outer": _dm3_shell_order.size() - terrain_ready,
 		"terrain_gap_nearest_m": first_gap_distance_m if is_finite(first_gap_distance_m) else -1.0,
 		"terrain_gap_front_cone": front_gap_count,
-		"dm10_velocity_front_gap": velocity_front_gap_count if not _dm10_visual_qos.is_empty() else -1,
+		"dm10_velocity_front_gap": velocity_front_gap_count,
 		"terrain_gap_age_p95_ms": gap_p95_ms,
 		"terrain_gap_new_since_last_scan": new_requests,
 		"rock_required_outer": rock_targets,
