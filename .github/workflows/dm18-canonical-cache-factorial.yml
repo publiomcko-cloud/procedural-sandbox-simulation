@@ -1,0 +1,157 @@
+name: DM18 canonical 16-chunk mesh revisit cache A/B
+on:
+  push:
+    branches:
+      - exp/dm18-canonical-region-revisit-cache
+  workflow_dispatch:
+concurrency:
+  group: dm18-canonical-revisit
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  exact:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 25
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: PowerShell 5.1 parsing and Godot 4.7.2 import/parse
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          $path = (Resolve-Path .\scripts\perf\run-dm18-canonical-cache-factorial.ps1).Path
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile($path,[ref]$tokens,[ref]$errors)
+          if ($errors.Count -gt 0) { Write-Host ($errors | Out-String); throw 'DM18_PS_PARSE_FAILED' }
+          & $env:GODOT_BIN --headless --editor --path .\game --import
+          if ($LASTEXITCODE -ne 0) { throw 'DM18_IMPORT_FAILED' }
+          foreach($file in @(
+            'res://scripts/terrain/dm18_canonical_region_cache.gd',
+            'res://scripts/terrain/terrain_demo.gd',
+            'res://scripts/terrain/terrain_mesh_job.gd',
+            'res://tests/experiments/dm18_canonical_cache_contract.gd'
+          )) {
+            & $env:GODOT_BIN --headless --path .\game --check-only --script $file
+            if ($LASTEXITCODE -ne 0) { throw "DM18_SCRIPT_PARSE_FAILED $file" }
+          }
+          Write-Host 'DM18_EXACT_PARSE_PASS'
+      - name: Cache revision contract and prior exact geometry
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          foreach($case in @(
+            @{file='res://tests/experiments/dm18_canonical_cache_contract.gd';receipt='DM18_CANONICAL_CACHE_PASS'},
+            @{file='res://tests/experiments/dm17_sparse_lattice_contract.gd';receipt='DM17_SPARSE_LATTICE_PASS'},
+            @{file='res://tests/experiments/dm11_canonical_b4_parity.gd';receipt='DM11_CANONICAL_PARITY_PASS'}
+          )) {
+            $out = & $env:GODOT_BIN --headless --path .\game --script $case.file 2>&1 | Out-String
+            Write-Host $out
+            if ($LASTEXITCODE -ne 0 -or -not $out.Contains($case.receipt) -or
+                $out -match 'SCRIPT ERROR:|Parse Error:|DM18_CANONICAL_CACHE_FAIL') {
+              throw "DM18_CONTRACT_FAIL $($case.file)"
+            }
+          }
+          Write-Host 'DM18_EXACT_ALL_PASS'
+
+  smoke:
+    needs: exact
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 30
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+      SANDBOX_TERRAIN_BACKEND: b4
+      SANDBOX_DM9_FAST_B4: '1'
+      SANDBOX_DM9_PREFETCH: '0'
+      SANDBOX_DM9_VISUAL_ADAPTIVE: '1'
+      SANDBOX_DM9_VISUAL_WORKERS: '4'
+      SANDBOX_DM11_CANONICAL_FAST_B4: '1'
+      SANDBOX_DM11_VISUAL_LANE: '0'
+      SANDBOX_DM12_SURFACE_SLICE: '1'
+      SANDBOX_DM13_WATER_WORKERS: '1'
+      SANDBOX_DM13_WATER_NATIVE: '1'
+      SANDBOX_DM14_DENSE_REQUIRED: '1'
+      SANDBOX_DM14_LAZY_ROUTES: '0'
+      SANDBOX_DM15_DORMANT_ROLLUP: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Import fresh project
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          & $env:GODOT_BIN --headless --editor --path .\game --import
+          if ($LASTEXITCODE -ne 0) { throw 'DM18_SMOKE_IMPORT_FAIL' }
+      - name: Initial 16-run runtime correctness and long revisit
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        timeout-minutes: 26
+        run: |
+          & .\scripts\perf\run-dm18-canonical-cache-factorial.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir (Join-Path $env:RUNNER_TEMP 'dm18-smoke') -LongPairs 2 -ShortPairs 2 -StraightPairs 2 -IdlePairs 2
+          if ($LASTEXITCODE -ne 0) { throw 'DM18_SMOKE_FAILED' }
+          Write-Host 'DM18_SMOKE_MATRIX_PASS'
+      - name: Preserve smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm18-smoke
+          path: |
+            ${{ runner.temp }}\dm18-smoke\**\*.log
+            ${{ runner.temp }}\dm18-smoke\**\*.json
+            ${{ runner.temp }}\dm18-smoke\*.json
+          retention-days: 14
+          if-no-files-found: warn
+
+  replicated:
+    needs: smoke
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 65
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+      SANDBOX_TERRAIN_BACKEND: b4
+      SANDBOX_DM9_FAST_B4: '1'
+      SANDBOX_DM9_PREFETCH: '0'
+      SANDBOX_DM9_VISUAL_ADAPTIVE: '1'
+      SANDBOX_DM9_VISUAL_WORKERS: '4'
+      SANDBOX_DM11_CANONICAL_FAST_B4: '1'
+      SANDBOX_DM11_VISUAL_LANE: '0'
+      SANDBOX_DM12_SURFACE_SLICE: '1'
+      SANDBOX_DM13_WATER_WORKERS: '1'
+      SANDBOX_DM13_WATER_NATIVE: '1'
+      SANDBOX_DM14_DENSE_REQUIRED: '1'
+      SANDBOX_DM14_LAZY_ROUTES: '0'
+      SANDBOX_DM15_DORMANT_ROLLUP: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Fresh project import
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          & $env:GODOT_BIN --headless --editor --path .\game --import
+          if ($LASTEXITCODE -ne 0) { throw 'DM18_REPLICATION_IMPORT_FAIL' }
+      - name: Forty-four ABBA trials fresh, revisit and idle at 18mps
+        timeout-minutes: 60
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          & .\scripts\perf\run-dm18-canonical-cache-factorial.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir (Join-Path $env:RUNNER_TEMP 'dm18-canonical-cache') -LongPairs 8 -ShortPairs 8 -StraightPairs 4 -IdlePairs 2
+          if ($LASTEXITCODE -ne 0) { throw 'DM18_REPLICATION_FAILED' }
+          Write-Host 'DM18_REPLICATION_MATRIX_PASS'
+      - name: Archive every trial and paired conclusion
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm18-canonical-cache-replicated
+          path: |
+            ${{ runner.temp }}\dm18-canonical-cache\**\*.log
+            ${{ runner.temp }}\dm18-canonical-cache\**\*.json
+            ${{ runner.temp }}\dm18-canonical-cache\*.json
+          retention-days: 21
+          if-no-files-found: warn
