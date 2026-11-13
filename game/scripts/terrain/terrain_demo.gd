@@ -24,6 +24,7 @@ const EnvironmentClimateDomainScript := preload("res://scripts/simulation/enviro
 const EnvironmentHydrologyDomainScript := preload("res://scripts/simulation/environment_hydrology_domain.gd")
 const EnvironmentSurfaceCacheJobScript := preload("res://scripts/simulation/environment_surface_cache_job.gd")
 const DM16BenchmarkProbe := preload("res://scripts/diagnostics/dm16_benchmark_probe.gd")
+const DM18CanonicalCache := preload("res://scripts/terrain/dm18_canonical_region_cache.gd")
 const DM12SnapshotBatch := preload("res://scripts/terrain/dm12_surface_snapshot_batch.gd")
 const EnvironmentVisualScript := preload("res://scripts/simulation/environment_visual_presentation.gd")
 const EnvironmentStartupLocation := preload("res://scripts/simulation/environment_startup_location.gd")
@@ -257,6 +258,25 @@ var _dm12_trace_enabled := false
 # SANDBOX_PERF_TRACE=0. Neither mode prints inside the _process loop.
 var _dm16_probe: RefCounted
 var _dm16_light_stage := false
+# DM18: opt-in revision-gated complete canonical mesh reuse.
+var _dm18_cache: RefCounted = DM18CanonicalCache.new()
+var _dm18_cache_enabled := false
+var _dm18_diagnostic_enabled := false
+var _dm18_focus_missing_visual_high := 0
+var _dm18_focus_missing_cached := 0
+var _dm18_focus_missing_total := 0
+var _dm18_cache_restores := 0
+var _dm18_restore_total_usec := 0
+var _dm18_restore_max_usec := 0
+var _dm18_cold_load_total_usec := 0
+var _dm18_cold_loads := 0
+var _dm18_hot_load_total_usec := 0
+var _dm18_hot_loads := 0
+var _dm18_job_times: Dictionary = {
+	"jobs": 0, "snapshot_usec": 0, "worker_queue_usec": 0,
+	"worker_run_usec": 0, "upload_usec": 0, "stale_jobs": 0
+}
+
 var _dm12_surface_slice := false
 var _dm14_lazy_route_enabled := false
 var _dm12_surface_prepare: Dictionary = {}
@@ -411,6 +431,10 @@ var _last_edit_rejection := ""
 
 func _ready() -> void:
 	_perf_trace_enabled = PerformanceTrace.is_enabled()
+	_dm18_cache_enabled = OS.get_environment("SANDBOX_DM18_CANONICAL_CACHE") == "1" \
+		and OS.get_environment("SANDBOX_TERRAIN_BACKEND").strip_edges().to_lower() == "b4"
+	_dm18_diagnostic_enabled = OS.get_environment("SANDBOX_DM18_DIAGNOSTIC") == "1" \
+		and OS.get_environment("SANDBOX_STREAM_BENCHMARK") == "1"
 	if OS.get_environment("SANDBOX_STREAM_BENCHMARK") == "1" \
 	and OS.get_environment("SANDBOX_DM16_BENCH_METRICS") == "1":
 		_dm16_probe = DM16BenchmarkProbe.new()
@@ -2669,6 +2693,88 @@ func _ensure_full_rebuild_targets(desired: Array[Vector2i], retained_ids: Dictio
 		_begin_region_stage(key, "full", ChunkGrid.all_coordinates())
 
 
+## Capture completed 16-chunk canonical mesh assets, never the world authority.
+func _dm18_identity_for_state(state: RefCounted) -> Dictionary:
+	if state == null or state.brush_edits == null:
+		return {}
+	return DM18CanonicalCache.identity(
+		int(state.world_seed), int(state.generator_version),
+		int(state.brush_edits.get_instance_id()), int(state.brush_edits.revision),
+		int(object_stream.get_command_world_revision()), cave_section_enabled,
+		_experimental_mesh_backend
+	)
+
+
+func _dm18_capture_completed_region(id: String, entry: Dictionary) -> void:
+	if not _dm18_cache_enabled or global_rebuild_pending or not _edit_transaction.is_empty():
+		return
+	var state: RefCounted = entry.get("world_state")
+	var identity_token := _dm18_identity_for_state(state)
+	if identity_token.is_empty():
+		return
+	var meshes := {}
+	var lods := {}
+	var fallback := {}
+	var vertices := {}
+	var triangles := {}
+	var nodes: Dictionary = entry.get("chunk_nodes", {})
+	var region: Vector2i = entry["region_key"]
+	for coordinate in ChunkGrid.all_coordinates():
+		var chunk_id := ChunkGrid.stable_id(region, coordinate)
+		if not nodes.has(chunk_id):
+			return
+		var node: MeshInstance3D = nodes[chunk_id]
+		if not is_instance_valid(node) or node.mesh == null:
+			return
+		meshes[coordinate] = node.mesh
+		lods[coordinate] = int(_published_lod_by_chunk.get(chunk_id, 0))
+		fallback[coordinate] = bool(_lod_fallback_chunks.get(chunk_id, false))
+		vertices[coordinate] = int(node.get_meta("mesh_vertex_count", 0))
+		triangles[coordinate] = int(node.get_meta("mesh_triangle_count", 0))
+	_dm18_cache.remember(id, region, identity_token, meshes, lods, fallback, vertices, triangles)
+
+
+## Stage the exact cached meshes; still call standard publication of object and
+## simulation scopes, using fresh ledger state and new revision-gated token.
+func _dm18_commit_cached_region_step() -> void:
+	if not _dm18_cache_enabled or global_rebuild_pending or not _edit_transaction.is_empty():
+		return
+	if _last_frame_ms >= 33.0 or _last_process_work_ms >= 18.0:
+		return
+	var candidates: Array[String] = []
+	for id_value in loading_regions.keys():
+		var id: String = id_value
+		if bool(loading_regions[id].get("dm18_cache_ready", false)):
+			candidates.append(id)
+	if candidates.is_empty():
+		return
+	candidates.sort_custom(func(a: String, b: String) -> bool:
+		var ka: Vector2i = loading_regions[a]["region_key"]
+		var kb: Vector2i = loading_regions[b]["region_key"]
+		var da := maxi(absi(ka.x - focus_region_key.x), absi(ka.y - focus_region_key.y))
+		var db := maxi(absi(kb.x - focus_region_key.x), absi(kb.y - focus_region_key.y))
+		return da < db if da != db else a < b
+	)
+	var id := candidates[0]
+	if not loading_regions.has(id):
+		return
+	var stage: Dictionary = loading_regions[id]
+	var state: RefCounted = stage["world_state"]
+	if not _dm18_cache.is_reusable(id, _dm18_identity_for_state(state)) \
+		or int(stage["edit_revision"]) != int(state.brush_edits.revision) \
+		or int(stage["terrain_effect_authority_revision"]) \
+			!= int(object_stream.get_command_world_revision()):
+		_dm18_cache.erase(id)
+		_supersede_region_stage(id)
+		return
+	var started := Time.get_ticks_usec()
+	_complete_region_stage(id)
+	var elapsed := Time.get_ticks_usec() - started
+	_dm18_cache_restores += 1
+	_dm18_restore_total_usec += elapsed
+	_dm18_restore_max_usec = maxi(_dm18_restore_max_usec, elapsed)
+
+
 func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinates: Array[Vector2i], dm9_speculative: bool = false) -> void:
 	var id := _region_id(region_key)
 	if purpose == "load" and _dm3_enabled() and _dm5_has_cached_high(id):
@@ -2739,6 +2845,23 @@ func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinate
 	}
 	if not dm9_speculative:
 		world_states[id] = state
+	# Only complete LOAD stages may restore the previous 16 canonical meshes.
+	if _dm18_cache_enabled and purpose == "load" and not dm9_speculative \
+		and not global_rebuild_pending and _edit_transaction.is_empty() \
+		and coordinates.size() == ChunkGrid.all_coordinates().size():
+		var reused: Dictionary = _dm18_cache.lookup(id, _dm18_identity_for_state(state))
+		if not reused.is_empty():
+			var cached_stage: Dictionary = loading_regions[id]
+			cached_stage["meshes"] = reused["meshes"]
+			cached_stage["actual_lod_by_coordinate"] = reused["lods"]
+			cached_stage["fallback_by_coordinate"] = reused["fallback"]
+			cached_stage["vertex_count_by_coordinate"] = reused["vertex_counts"]
+			cached_stage["triangle_count_by_coordinate"] = reused["triangle_counts"]
+			cached_stage["next_index"] = coordinates.size()
+			cached_stage["submit_index"] = coordinates.size()
+			cached_stage["pending_count"] = 0
+			cached_stage["dm18_cache_ready"] = true
+			loading_regions[id] = cached_stage
 	if region_key == focus_region_key:
 		world_state = state
 	if _perf_trace_enabled:
@@ -3612,6 +3735,7 @@ func _process_progressive_chunk_publications() -> void:
 
 
 func _process_one_chunk_job() -> void:
+	_dm18_commit_cached_region_step()
 	var started_usec := Time.get_ticks_usec()
 	_prune_progressive_chunks()
 	_dm12_stage("mesh_prune", started_usec)
@@ -5611,6 +5735,7 @@ func _unload_region(id: String) -> void:
 		if not simulation_unload.get("ok", false):
 			_simulation_streaming_status = "Simulation unload issue: %s" % simulation_unload.get("reason", "unknown")
 	object_stream.unload_region(entry["region_key"])
+	_dm18_capture_completed_region(id, entry)
 	if _edit_transaction.has("target_ids") and (_edit_transaction["target_ids"] as Array).has(id):
 		_edit_transaction["target_ids"].erase(id)
 		loading_regions.erase(id)
@@ -5768,6 +5893,8 @@ func _record_completed_operation(stage: Dictionary) -> void:
 
 
 func _start_global_rebuild(operation_name: String) -> void:
+	if _dm18_cache_enabled:
+		_dm18_cache.clear()
 	_discard_all_progressive_chunks("global_rebuild")
 	if operation_name != "load_world":
 		_pending_world_load = {}
