@@ -944,7 +944,7 @@ func _poll_resident_regions() -> void:
 			_water_wait(id, row, "mesh_plan:" + String(plan.get("reason", "unknown")))
 			continue
 		_dm13_commit_plan(id, row, node, environment, surface, token,
-			neighbor_signature, plan, started)
+			neighbor_signature, hydrology_enabled, plan, started)
 		rebuilt += 1
 
 ## Original publication path shared by the synchronous baseline and
@@ -952,7 +952,8 @@ func _poll_resident_regions() -> void:
 func _dm13_commit_plan(
 	id: String, row: Dictionary, node: MeshInstance3D,
 	environment: Dictionary, surface: Dictionary, token: String,
-	neighbor_signature: PackedByteArray, plan: Dictionary, started: int
+	neighbor_signature: PackedByteArray, hydrology_enabled: bool,
+	plan: Dictionary, started: int
 ) -> void:
 	var vertices: PackedVector3Array = plan["vertices"]
 	# Fully prepare the replacement before touching the visible mesh.
@@ -1116,9 +1117,13 @@ func _dm13_publish_ready() -> void:
 			row["token"] = ""
 			_water_wait(id, row, "worker_mesh_plan:" + String(plan.get("reason", "unknown")))
 			continue
+		var hydrology_enabled := true
+		if _runtime.has_method("has_environment_hydrology"):
+			hydrology_enabled = bool(_runtime.call("has_environment_hydrology"))
 		var started := Time.get_ticks_usec()
 		_dm13_commit_plan(id, row, node, environment, surface,
-			String(record["token"]), record["neighbor_signature"], plan, started)
+			String(record["token"]), record["neighbor_signature"],
+			hydrology_enabled, plan, started)
 		var publish_usec := Time.get_ticks_usec() - started
 		_dm13_peak_publish_usec = maxi(_dm13_peak_publish_usec, publish_usec)
 		_dm13_completed_total += 1
