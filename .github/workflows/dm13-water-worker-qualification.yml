@@ -1,0 +1,230 @@
+name: DM13 revision-gated water worker parity and A/B
+
+on:
+  push:
+    branches:
+      - exp/dm13-water-worker-revision-gated
+  workflow_dispatch:
+
+concurrency:
+  group: dm13-water-worker-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 25
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Parse Godot runtime and incremental immutable snapshot helper
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          & $env:GODOT_BIN --headless --editor --path .\game --import
+          if ($LASTEXITCODE -ne 0) { throw 'DM12 project import failed' }
+          foreach ($file in @(
+            'res://scripts/terrain/terrain_demo.gd',
+            'res://scripts/terrain/dm12_surface_snapshot_batch.gd',
+            'res://scripts/simulation/environment_visual_presentation.gd',
+            'res://scripts/simulation/dm13_water_geometry_job.gd',
+            'res://tests/experiments/dm13_water_worker_parity.gd',
+            'res://tests/experiments/dm12_surface_snapshot_batch_contract.gd'
+          )) {
+            & $env:GODOT_BIN --headless --path .\game --check-only --script $file
+            if ($LASTEXITCODE -ne 0) { throw "DM12 parse failed: $file" }
+          }
+      - name: Exact 16-chunk base snapshot equivalence, edits and stale-revision protection
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        timeout-minutes: 15
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'dm13-water-contract'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          foreach ($case in @(
+            @{name='dm13-water'; script='res://tests/experiments/dm13_water_worker_parity.gd'; receipt='DM13_WATER_PARITY_PASS'},
+            @{name='p5-water'; script='res://tests/p5_0f_environment_visuals_tests.gd'; receipt='P5_0F_ENVIRONMENT_VISUALS_PASS'},
+            @{name='dm12-batch'; script='res://tests/experiments/dm12_surface_snapshot_batch_contract.gd'; receipt='DM12_SURFACE_BATCH_PASS'},
+            @{name='dm11-canonical'; script='res://tests/experiments/dm11_canonical_b4_parity.gd'; receipt='DM11_CANONICAL_PARITY_PASS'},
+            @{name='p5-surface'; script='res://tests/p5_0c_sdf_surface_cache_tests.gd'; receipt='P5_0C'}
+          )) {
+            $out = & $env:GODOT_BIN --headless --path .\game --script $case.script 2>&1 | Out-String
+            $out | Set-Content (Join-Path $dir "$($case.name).log") -Encoding UTF8
+            Write-Host $out
+            if ($LASTEXITCODE -ne 0 -or -not $out.Contains($case.receipt) -or
+                $out.Contains('DM12_SURFACE_BATCH_FAIL')) {
+              throw "DM12 contract failed: $($case.name)"
+            }
+          }
+          Write-Host 'DM13_WATER_CONTRACT_PASS'
+      - name: Upload exact parity evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm13-water-contract
+          path: ${{ runner.temp }}\dm13-water-contract\*.log
+          retention-days: 14
+          if-no-files-found: warn
+
+  ab:
+    needs: contract
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 95
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+      SANDBOX_TERRAIN_BACKEND: b4
+      SANDBOX_DM9_FAST_B4: '1'
+      SANDBOX_DM9_PREFETCH: '0'
+      SANDBOX_DM9_VISUAL_ADAPTIVE: '1'
+      SANDBOX_DM9_VISUAL_WORKERS: '4'
+      SANDBOX_DM11_CANONICAL_FAST_B4: '1'
+      SANDBOX_DM11_VISUAL_LANE: '0'
+      SANDBOX_DM12_FRAME_TRACE: '0'
+      SANDBOX_DM12_SURFACE_SLICE: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Same-seed snapshot slicing off/on paired 18mps and stationary
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        timeout-minutes: 85
+        run: |
+          & $env:GODOT_BIN --headless --editor --path .\game --import
+          if ($LASTEXITCODE -ne 0) { throw 'DM12 import failed' }
+          $root = Join-Path $env:RUNNER_TEMP 'dm13-water-ab'
+          $cases = @(
+            @{label='A-motion'; route='outback-18'; frames=720; slice='0'},
+            @{label='B-motion'; route='outback-18'; frames=720; slice='1'},
+            @{label='A-idle'; route='idle'; frames=3600; slice='0'},
+            @{label='B-idle'; route='idle'; frames=3600; slice='1'},
+            @{label='B-motion2'; route='outback-18'; frames=720; slice='1'},
+            @{label='A-motion2'; route='outback-18'; frames=720; slice='0'}
+          )
+          $summary = @()
+          foreach ($case in $cases) {
+            $env:SANDBOX_DM13_WATER_WORKERS = $case.slice
+            $dir = Join-Path $root $case.label
+            & .\scripts\perf\run-p5-deterministic-stream-benchmark.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $dir -Frames $case.frames -Routes @($case.route) -Profiles @('adaptive-skip-progressive') -CaptureProcessCpu
+            $name = "01-$($case.route)-adaptive-skip-progressive"
+            $m = Get-Content (Join-Path $dir "$name.metrics.json") -Raw | ConvertFrom-Json
+            $log = @(Get-Content (Join-Path $dir "$name.stdout.log"))
+            $token = '"event":"dm13_water_job_completed"'
+            $batchEvents = @($log | Where-Object { $_.Contains($token) })
+            $profile = @($log | Where-Object { $_.Contains('"event":"terrain_stream_profile"') })
+            if ($m.seed -ne 424242 -or $m.requested_frames -ne $case.frames -or
+                -not [bool]$m.dm11_canonical_fast_b4_enabled -or
+                [bool]$m.dm11_visual_lane_enabled -or $profile.Count -ne 1 -or
+                -not $profile[0].Contains('"dm12_surface_slice":true') -or
+                ($case.slice -eq '1' -and -not ($log -join " ").Contains('DM13_WATER_WORKERS: enabled=1')) -or
+                ($case.slice -eq '0' -and ($log -join " ").Contains('DM13_WATER_WORKERS: enabled=1'))) {
+              throw "DM12 A/B invariants failed: $($case.label)"
+            }
+            if ($case.slice -eq '1' -and $batchEvents.Count -lt 1) {
+              throw "DM13 water worker never completed: $($case.label)"
+            }
+            if ($case.slice -eq '0' -and $batchEvents.Count -ne 0) {
+              throw "DM13 water worker unexpectedly completed in baseline: $($case.label)"
+            }
+            $windows = @()
+            foreach ($line in $log) {
+              if (-not $line.Contains('"event":"terrain_stream_budget_window"')) { continue }
+              $pos = $line.IndexOf('PERF_TRACE ')
+              if ($pos -lt 0) { continue }
+              $windows += ($line.Substring($pos + 11) | ConvertFrom-Json)
+            }
+            $cacheStageMs = @($windows | ForEach-Object {
+              [double]$_.stage_work_usec.sdf_cache / [Math]::Max(1.0, [double]$_.frame_count) / 1000.0
+            })
+            $receipt = [ordered]@{
+              variant = $case.label; water_cpu_worker = ($case.slice -eq '1'); route = $case.route;
+              canonical_missing_focus_pct = $m.f10_focus_missing_pct;
+              canonical_p95_ms = $m.region_load_p95_ms;
+              canonical_worker_queue_p95_ms = $m.worker_queue_p95_ms;
+              visual_high_completed = $m.dm9_visual_shell_complete_count;
+              full_high_elapsed_ms = $m.dm9_full_high_elapsed_ms;
+              frames_over_20_pct = $m.frames_over_20_ms_pct;
+              frames_over_33_pct = $m.frames_over_33_ms_pct;
+              avg_frame_ms = $m.avg_frame_ms;
+              process_avg_ms = $m.avg_process_ms;
+              water_cpu_worker_completions = $batchEvents.Count;
+              baseline_water_rebuild_events = @($log | Where-Object { $_.Contains('"event":"p5_environment_visual_rebuild"') }).Count;
+              sdf_cache_avg_window_ms_per_frame = $(if ($cacheStageMs.Count) { [Math]::Round(($cacheStageMs | Measure-Object -Average).Average, 3) } else { $null });
+              sdf_cache_worst_window_ms_per_frame = $(if ($cacheStageMs.Count) { [Math]::Round(($cacheStageMs | Measure-Object -Maximum).Maximum, 3) } else { $null });
+              cpu_mean_pct = $m.process_cpu_mean_pct_total_capacity;
+              rss_peak_mb = $m.process_rss_peak_mb;
+            }
+            $summary += $receipt
+            Write-Host ('DM13_WATER_AB_CASE=' + ($receipt | ConvertTo-Json -Compress -Depth 7))
+          }
+          $summary | ConvertTo-Json -Depth 9 | Set-Content (Join-Path $root 'dm13-water-ab-summary.json') -Encoding UTF8
+          Write-Host 'DM13_WATER_AB_PASS'
+      - name: Retain complete A/B and instrumented snapshot logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm13-water-ab
+          path: |
+            ${{ runner.temp }}\dm13-water-ab\**\*.log
+            ${{ runner.temp }}\dm13-water-ab\**\*.json
+          retention-days: 14
+          if-no-files-found: warn
+
+  gpu:
+    needs: ab
+    runs-on: [self-hosted, Windows, X64, gpu-interactive]
+    timeout-minutes: 30
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+      SANDBOX_TERRAIN_BACKEND: b4
+      SANDBOX_DM9_FAST_B4: '1'
+      SANDBOX_DM9_PREFETCH: '0'
+      SANDBOX_DM9_VISUAL_ADAPTIVE: '1'
+      SANDBOX_DM9_VISUAL_WORKERS: '4'
+      SANDBOX_DM11_CANONICAL_FAST_B4: '1'
+      SANDBOX_DM11_VISUAL_LANE: '0'
+      SANDBOX_DM12_SURFACE_SLICE: '1'
+      SANDBOX_DM12_FRAME_TRACE: '0'
+      SANDBOX_DM13_WATER_WORKERS: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Interactive Windows GPU session
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          & .\scripts\ci\p5-gpu-session-preflight.ps1 -Role Interactive
+      - name: B4 HIGH and sliced environment cache rendered smoke
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        timeout-minutes: 20
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'dm13-water-gpu'
+          & .\scripts\perf\run-p5-gpu-smoke.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $dir -Frames 360 -Routes @('straight-18') -StreamProfile 'adaptive-skip-progressive'
+          if ($LASTEXITCODE -ne 0) { throw 'DM12 GUI smoke failed' }
+          $s = Get-Content (Join-Path $dir 'gpu-straight-18.stdout.log') -Raw
+          if (-not $s.Contains('DM13_WATER_WORKERS: enabled=1') -or
+              -not $s.Contains('"event":"dm13_water_job_completed"') -or
+              -not $s.Contains('"event":"dm4_region_b4_high_visible"')) {
+            throw 'DM12 GPU provenance or derived HIGH terrain absent'
+          }
+          Write-Host 'DM13_GPU_PASS'
+      - name: Keep GPU logs and screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm13-water-gpu
+          path: |
+            ${{ runner.temp }}\dm13-water-gpu\*.png
+            ${{ runner.temp }}\dm13-water-gpu\*.log
+            ${{ runner.temp }}\dm13-water-gpu\*.json
+          retention-days: 14
+          if-no-files-found: warn
