@@ -31,6 +31,14 @@ func _run() -> void:
 	var moving_admitted := Policy.plan(4, "balanced", 18.0, false, 4, 7, 16.6, 4.0, 1100000)
 	_check(moving_admitted["may_submit"] and moving_admitted["limit"] == 1,
 		"balanced normal speed permits occasional non-starving visual progress")
+	var corridor_missing := Policy.plan(4, "corridor", 18.0, false, 4, 7, 16.6, 4.0, 550000)
+	_check(corridor_missing["may_submit"] and corridor_missing["limit"] == 1,
+		"corridor permits bounded forward work at 500ms while canonical incomplete")
+	var corridor_cooldown := Policy.plan(4, "corridor", 18.0, false, 4, 7, 16.6, 4.0, 450000)
+	_check(not corridor_cooldown["may_submit"], "corridor respects minimum spacing")
+	var corridor_pressure := Policy.plan(4, "corridor", 18.0, true, 3, 5, 24.0, 15.0, 600000)
+	_check(not corridor_pressure["may_submit"] and int(corridor_pressure["interval_usec"]) >= 850000,
+		"corridor protects CPU on bad frames")
 	var guarded := Policy.plan(4, "guarded", 18.0, false, 4, 7, 16.6, 4.0, 4000000)
 	_check(not guarded["may_submit"] and guarded["reason"] == "guarded_missing_core",
 		"guarded profile protects missing canonical core")
