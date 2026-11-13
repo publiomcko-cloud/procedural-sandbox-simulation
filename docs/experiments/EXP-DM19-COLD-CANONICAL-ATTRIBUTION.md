@@ -42,3 +42,51 @@ Somente após receber resultados qualificados, escolher **uma** intervenção:
 5. Se nenhum fator domina consistentemente, **não alterar a arquitetura**, ampliar ensaios pareados e instrumentar a causa ainda não atribuída.
 
 Segurança obrigatória: seed/revisões, modificações, caves, seams, colisões, objetos mod-first, hidratação da simulação, DM18 cache e publicação `revision-gated` permanecem iguais. Não usar velocidades 54m/s; não confundir visual HIGH disponível com foco canônico autoritativo.
+
+
+## Resultado da campanha DM19 original — 12 execuções (PASS)
+
+**Código qualificado:** `3b3a7f377bab9e66d597c52adb9ecb086d9bd835`. [GitHub Actions DM19](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43513521113) PASS. Contratos de atribuição 23/23 e geometria DM18, DM17, DM11 PASS. Todos os ensaios possuem DM18 ON, perfil `adaptive-skip-progressive`, seed 424242, 18 m/s wall-clock e tracing pesado OFF.
+
+**Controle do overhead de instrumentação:** quatro pares `straight-18` com DM19 OFF/ON:
+- foco canônico ausente: OFF **38,507%**, ON **38,785%**, diferença +0,278 p.p.
+- frame p99: OFF **24,215ms**, ON **22,149ms**, diferença −2,067ms, não interpretar como ganho causal (o DM19 não muda o algoritmo);
+- frames >33ms OFF **0,417%**, ON **0,348%**, diferença −0,069 p.p.
+- cache hits OFF/ON 0, por construção do percurso de regiões inéditas.
+
+A variabilidade entre runs é relevante; os números não indicam grande perturbação sistemática por DM19, mas não provam overhead nulo.
+
+### Etapas canônicas de regiões inéditas a 18m/s
+
+Em quatro execuções ON, as regiões inéditas publicadas tiveram médias (média das médias por execução):
+
+| Etapa | Média |
+|---|---:|
+| Estágio solicitado até primeiro despacho | **857,936ms** |
+| Intervalo do primeiro ao último despacho | 289,355ms |
+| Último despacho até publicação definitiva | 144,536ms |
+| **Total por região publicada** | **1291,826ms** |
+
+Portanto, ~66,4% da latência da região foi **anterior ao primeiro despacho**; não é explicável por SDF ou Surface Nets desse job. Observar que as regiões canceladas não entram nas médias de tempo de regiões publicadas; as razões de cancelamento são medidas separadamente.
+
+Médias por execução de 720 frames:
+- preparação de efeitos: **229** chamadas `pending` em **730,25** tentativas (~31,4%).
+- `dispatch_cap`: **368** ocorrências;
+- `effect_skip_not_allowed_or_budget`: **155,25** ocorrências;
+- `worker_capacity`: **196,75** ocorrências;
+- orçamento de **um despacho** em **692/720 frames** (~96,1%); dois em 28/720.
+- foco canônico ausente classificado: **113,75 frames** antes do primeiro despacho; **91,5** enquanto ainda submete chunks; **74** aguardando conclusão ou upload. O restante varia conforme carga e fase; não extrapolar esses buckets como tempo contínuo de uma única região.
+- `first_visit.left_window`: 18 a 21 estágios cancelados por execução; outras regiões em progresso completaram normalmente.
+- reconciliação da janela de efeitos somou apenas ~21 a 27ms por corrida; não é a causa direta dominante. Custo acumulado de `effect_prefetch` e workers de projeção deve ser comparado com a demora na disponibilidade de fontes.
+
+**Diagnóstico:** o gargalo principal está no caminho **estágio enfileirado → primeiro job canônico**. A causa tem contribuição de (i) pré-requisitos de efeitos ainda pendentes, (ii) limite de despacho quase sempre 1/frame e (iii) concorrência dos workers. Não concluir exclusivamente pelo volume de `dispatch_cap` que basta duplicar o orçamento: houve ~197 bloqueios por capacidade em paralelo.
+
+### Próximo ensaio registrado: DM19-B
+
+[Branch experimental](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/tree/exp/dm19-effect-motion-priority) ativa, apenas sob `SANDBOX_DM19_EFFECT_MOTION_PRIORITY=1`, a **priorização por movimento dos itens já presentes na fila de fontes de efeitos**. Ela:
+- mantém cache DM18 ON, SDF, Surface Nets, 16 chunks, autoridade de efeitos, radius, objetos, geometria, revisões, worker pool e limites de despacho inalterados;
+- não habilita `_lookahead_stage_targets` nem novos carregamentos canônicos; apenas invoca `prioritize_prefetch_for_motion` para reordenar fontes já protegidas;
+- compara A/B em `straight-18` como cenário principal e `outback-18` como regressão, em ordem ABBA, com DM19 instrumentation ON em ambos.
+- `main` permanece intacta; sem promoção antes de equivalência e ganho consistente do foco canônico sem piora de p99.
+
+Se a priorização for neutra, a intervenção seguinte tecnicamente justificada será testar *oportunidade de primeiro despacho com orçamento adaptativo adicional estritamente limitado*, monitorando saturação de workers, p99 e HIGH estável, não aumentar a capacidade de maneira indiscriminada.
