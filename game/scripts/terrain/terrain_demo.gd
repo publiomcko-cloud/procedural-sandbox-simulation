@@ -33,6 +33,7 @@ const StreamDispatchSelector := preload("res://scripts/terrain/terrain_stream_di
 const StreamLookaheadPolicy := preload("res://scripts/terrain/terrain_stream_lookahead_policy.gd")
 const DM9PrefetchPolicy := preload("res://scripts/terrain/dm9_canonical_prefetch_policy.gd")
 const DM9VisualBudget := preload("res://scripts/terrain/dm9_visual_worker_budget_policy.gd")
+const DM10VisualPolicy := preload("res://scripts/terrain/dm10_motion_aware_visual_policy.gd")
 const CoarsePreviewJob := preload("res://scripts/terrain/terrain_coarse_preview_job.gd")
 const CoarsePreviewPolicy := preload("res://scripts/terrain/terrain_coarse_preview_policy.gd")
 const ProgressiveLoadPolicy := preload("res://scripts/terrain/terrain_stream_progressive_load_policy.gd")
@@ -274,6 +275,14 @@ var _dm9_visual_worker_limit := 1
 var _dm9_visual_worker_effective_limit := 1
 var _dm9_visual_adaptive := false
 var _dm9_fast_b4 := false
+var _dm10_visual_qos := ""
+var _dm10_plan: Dictionary = {}
+var _dm10_velocity := Vector3.ZERO
+var _dm10_last_visual_submit_usec := 0
+var _dm10_visual_submitted_total := 0
+var _dm10_canonical_blocked_frames := 0
+var _dm10_visual_cooldown_frames := 0
+var _dm10_directional_scans := 0
 var _dm9_shell_started_total := 0
 var _dm9_shell_completed_total := 0
 var _lookahead_stage_begin_total := 0
@@ -417,6 +426,12 @@ func _ready() -> void:
 	_dm9_fast_b4 = _dm3_enabled() and OS.get_environment("SANDBOX_DM9_FAST_B4") == "1"
 	if _dm9_fast_b4:
 		print("DM9_FAST_B4: enabled=1 pristine_visual_only=1 authoritative_backend_unchanged=1")
+	var qos_request := OS.get_environment("SANDBOX_DM10_VISUAL_QOS").to_lower().strip_edges()
+	if _dm3_enabled() and qos_request in ["balanced", "guarded"]:
+		_dm10_visual_qos = qos_request
+		print("DM10_VISUAL_QOS: mode=%s canonical_first=1 directional_priority=velocity high_fast_b4=%d" % [_dm10_visual_qos, int(_dm9_fast_b4)])
+	elif qos_request != "" and qos_request != "off":
+		push_warning("DM10_VISUAL_QOS: unrecognized mode, disabled")
 	if _dm9_visual_adaptive:
 		print("DM9_VISUAL_ADAPTIVE: enabled=1 max_workers=%d core_missing_or_loading=1 moving_limit=1 idle_max=4" % _dm9_visual_worker_limit)
 	if _dm9_visual_worker_limit > 1:
@@ -457,6 +472,7 @@ func _ready() -> void:
 			"dm9_visual_worker_limit": _dm9_visual_worker_limit,
 			"dm9_visual_adaptive": _dm9_visual_adaptive,
 			"dm9_fast_b4": _dm9_fast_b4,
+			"dm10_visual_qos": _dm10_visual_qos,
 			"snapshot_budget_usec": MESH_SNAPSHOT_FRAME_BUDGET_USEC,
 			"upload_budget_usec": MESH_UPLOAD_FRAME_BUDGET_USEC,
 		})
@@ -1116,6 +1132,13 @@ func _stream_finish_frame() -> void:
 		"dm9_visual_worker_effective_limit": _dm9_visual_worker_effective_limit,
 		"dm9_visual_adaptive": _dm9_visual_adaptive,
 		"dm9_fast_b4": _dm9_fast_b4,
+		"dm10_visual_qos": _dm10_visual_qos,
+		"dm10_visual_qos_state": String(_dm10_plan.get("state", "off")),
+		"dm10_visual_qos_reason": String(_dm10_plan.get("reason", "off")),
+		"dm10_visual_qos_submitted_total": _dm10_visual_submitted_total,
+		"dm10_canonical_blocked_frames": _dm10_canonical_blocked_frames,
+		"dm10_visual_cooldown_frames": _dm10_visual_cooldown_frames,
+		"dm10_directional_scans": _dm10_directional_scans,
 		"dm9_visual_workers_in_flight": _dm3_shell_jobs.size(),
 		"dm9_visual_started_total": _dm9_shell_started_total,
 		"dm9_visual_completed_total": _dm9_shell_completed_total,
@@ -1221,6 +1244,7 @@ func _process(delta: float) -> void:
 		f10_motion.length() / maxf(delta, 0.000001)
 		if free_explore_enabled else 0.0
 	)
+	_dm10_velocity = f10_motion / maxf(delta, 0.000001) if free_explore_enabled else Vector3.ZERO
 	var stream_preflight_started_usec := Time.get_ticks_usec()
 	_update_focus_key()
 	# R3's speculative stage strip is derived entirely from the F10 camera.
@@ -5076,13 +5100,26 @@ func _dm4_emit_full_high_receipt_if_ready() -> void:
 
 
 func _dm9_visual_limit_for_frame() -> int:
-	if not _dm9_visual_adaptive:
+	if not _dm9_visual_adaptive and _dm10_visual_qos.is_empty():
 		return _dm9_visual_worker_limit
 	var core_ready := true
 	for key in _region_keys_within_radius(focus_region_key, REQUEST_RADIUS):
 		if not active_regions.has(_region_id(key)):
 			core_ready = false
 			break
+	if not _dm10_visual_qos.is_empty():
+		_dm10_plan = DM10VisualPolicy.plan(
+			_dm9_visual_worker_limit,
+			_dm10_visual_qos,
+			_last_f10_speed_mps,
+			core_ready,
+			loading_regions.size(),
+			_mesh_jobs.size(),
+			_last_frame_ms,
+			_last_process_work_ms,
+			maxi(0, Time.get_ticks_usec() - _dm10_last_visual_submit_usec)
+		)
+		return int(_dm10_plan.get("limit", 1))
 	return DM9VisualBudget.effective_limit(
 		_dm9_visual_worker_limit,
 		core_ready,
@@ -5099,6 +5136,11 @@ func _dm3_process_shells() -> void:
 		return
 	var now := Time.get_ticks_usec()
 	_dm9_visual_worker_effective_limit = _dm9_visual_limit_for_frame()
+	if not _dm10_visual_qos.is_empty() and not bool(_dm10_plan.get("may_submit", false)):
+		if bool(_dm10_plan.get("canonical_pressure", false)):
+			_dm10_canonical_blocked_frames += 1
+		else:
+			_dm10_visual_cooldown_frames += 1
 	# Retired meshes must not survive a world seed switch.
 	if _dm3_shell_seed != world_seed:
 		for id_value in _dm3_shell_nodes.keys().duplicate():
@@ -5217,6 +5259,11 @@ func _dm3_process_shells() -> void:
 		_dm3_shell_order = DM3Policy.desired_regions(
 			focus_region_key, _dm3_forward(), orbit_target
 		)
+		if not _dm10_visual_qos.is_empty() and _last_f10_speed_mps > DM10VisualPolicy.SLOW_MPS:
+			_dm3_shell_order = DM10VisualPolicy.prioritize_direction(
+				_dm3_shell_order, orbit_target, _dm10_velocity
+			)
+			_dm10_directional_scans += 1
 		var scan_usec := Time.get_ticks_usec() - radial_scan_started
 		_dm8_radial_scan_count += 1
 		_dm8_radial_scan_total_usec += scan_usec
@@ -5226,9 +5273,27 @@ func _dm3_process_shells() -> void:
 		_dm7_process_high_rocks(now)
 		_dm8_sample_gap_pressure(now)
 		_dm4_emit_full_high_receipt_if_ready()
+		if _perf_trace_enabled and not _dm10_visual_qos.is_empty():
+			PerformanceTrace.emit("dm10_visual_qos_sample", {
+				"mode": _dm10_visual_qos,
+				"state": String(_dm10_plan.get("state", "")),
+				"reason": String(_dm10_plan.get("reason", "")),
+				"speed_mps": _last_f10_speed_mps,
+				"core_ready": not bool(_dm10_plan.get("canonical_pressure", true)) or (_region_keys_within_radius(focus_region_key, REQUEST_RADIUS).all(func(key: Vector2i) -> bool: return active_regions.has(_region_id(key)))),
+				"canonical_loading": loading_regions.size(),
+				"canonical_mesh_jobs": _mesh_jobs.size(),
+				"visual_in_flight": _dm3_shell_jobs.size(),
+				"visual_limit": _dm9_visual_worker_effective_limit,
+				"may_submit": bool(_dm10_plan.get("may_submit", false)),
+				"submission_interval_usec": int(_dm10_plan.get("interval_usec", 0)),
+				"visual_started_total": _dm9_shell_started_total,
+				"focus": [focus_region_key.x, focus_region_key.y],
+			})
 	# Prioritize authoritative SDF/B4 jobs over the derived circular halo.
 	# DM9 can submit up to four CPU-only derived HIGH jobs, but only while idle and canonical-ready.
 	# One main-thread upload/frame remains enforced above; sorted queue remains stable.
+	if not _dm10_visual_qos.is_empty() and not bool(_dm10_plan.get("may_submit", false)):
+		return
 	if _last_frame_ms >= 40.0 or _last_process_work_ms >= 22.0 \
 			or _dm3_shell_jobs.size() >= _dm9_visual_worker_effective_limit \
 			or global_rebuild_pending or cave_section_enabled:
@@ -5269,6 +5334,9 @@ func _dm3_process_shells() -> void:
 			"submitted_usec": Time.get_ticks_usec(),
 		}
 		_dm9_shell_started_total += 1
+		if not _dm10_visual_qos.is_empty():
+			_dm10_last_visual_submit_usec = Time.get_ticks_usec()
+			_dm10_visual_submitted_total += 1
 		if _dm9_visual_worker_limit <= 1:
 			break
 
