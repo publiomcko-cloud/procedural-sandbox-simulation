@@ -5279,7 +5279,7 @@ func _dm3_process_shells() -> void:
 				"state": String(_dm10_plan.get("state", "")),
 				"reason": String(_dm10_plan.get("reason", "")),
 				"speed_mps": _last_f10_speed_mps,
-				"core_ready": not bool(_dm10_plan.get("canonical_pressure", true)) or (_region_keys_within_radius(focus_region_key, REQUEST_RADIUS).all(func(key: Vector2i) -> bool: return active_regions.has(_region_id(key)))),
+				"core_ready": bool(_dm10_plan.get("core_ready", false)),
 				"canonical_loading": loading_regions.size(),
 				"canonical_mesh_jobs": _mesh_jobs.size(),
 				"visual_in_flight": _dm3_shell_jobs.size(),
