@@ -245,7 +245,7 @@ func release_scope(
 		_dm14_route_cleanup.append({
 			"scope_id": scope_id,
 			"index": _scope_indexes[scope_id],
-			"keys": Array[String](),
+			"keys": [],
 			"cursor": 0,
 			"prepared": false,
 		})
@@ -1136,6 +1136,7 @@ func process_route_cleanup_step(
 			row["prepared"] = true
 		var keys: Array[String] = row["keys"]
 		var cursor := int(row["cursor"])
+		var first_cursor := cursor
 		while cursor < keys.size() and cleaned < maxi(1, max_chunk_keys):
 			_dm14_remove_inactive_route(String(row["scope_id"]), keys[cursor])
 			cursor += 1
@@ -1143,7 +1144,7 @@ func process_route_cleanup_step(
 			if Time.get_ticks_usec() - started_usec >= maxi(1, budget_usec):
 				break
 		row["cursor"] = cursor
-		_dm14_cleanup_keys_total += cleaned
+		_dm14_cleanup_keys_total += cursor - first_cursor
 		if cursor >= keys.size():
 			_dm14_route_cleanup.pop_front()
 		else:
