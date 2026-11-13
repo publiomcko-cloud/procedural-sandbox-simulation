@@ -20,7 +20,9 @@ class FakeIndex:
 		return keys.duplicate()
 
 	func get_frames_for_chunk(_region: Vector2i, _chunk: Vector2i) -> Array[Dictionary]:
-		return []
+		# A valid tiny local frame fixture proves that an old, still-indexed
+		# membership cannot leak semantic content after scope invalidation.
+		return [{"effect_id": "dm14-test-frame", "frame_sha256": "a".repeat(64)}]
 
 var checks := 0
 var fails := 0
@@ -51,6 +53,8 @@ func _run() -> void:
 	_check(service.get_loaded_scope_count() == 1, "one active scope")
 	_check(service.snapshot_for_chunk(region, Vector2i.ZERO).get("routed_scope_count") == 1,
 		"original active reverse route visible")
+	_check(service.snapshot_for_chunk(region, Vector2i.ZERO).get("effect_count") == 1,
+		"active reverse route returns an actual frame")
 	service.release_scope(region, true)
 	_check(service.get_loaded_scope_count() == 0, "authority removed in release_scope")
 	_check(not service._scope_indexes.has(id), "source route index immediately inactive")
@@ -59,6 +63,8 @@ func _run() -> void:
 		"tombstoned member excluded from exact routed source count")
 	_check(service.get_frames_for_chunk(region, Vector2i.ZERO).is_empty(),
 		"inactive source cannot leak frames during deferred cleanup")
+	_check(service.snapshot_for_chunk(region, Vector2i.ZERO).get("effect_count") == 0,
+		"released frame count and content hash exclude inactive sources")
 	_check(service._dm14_route_cleanup.size() == 1, "one pending inactive index")
 	var step: Dictionary = service.process_route_cleanup_step(1, 1000000)
 	_check(step.get("ok", false), "bounded cleanup succeeds")
@@ -79,6 +85,8 @@ func _run() -> void:
 	_install_fake(service, id, snapshot, different_index)
 	_check(service._dm14_route_cleanup.is_empty(), "revisit flushes old pending scope")
 	_check(not service._scope_ids_by_chunk.has(first_chunk), "old-only route removed on revisit")
+	_check(service.snapshot_for_chunk(region, Vector2i.ZERO).get("effect_count") == 0,
+		"old-only target returns zero effects after rapid scope reactivation")
 	_check(service._scope_ids_by_chunk.has(second_chunk), "new scoped route installed")
 	_check(service.get_frames_for_chunk(region, Vector2i.ZERO).is_empty(),
 		"revisit never leaks old frames")
