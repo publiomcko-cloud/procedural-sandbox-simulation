@@ -248,6 +248,24 @@ var _stream_window_work_ms_peak := 0.0
 var _stream_window_dispatches := 0
 var _stream_window_uploads := 0
 var _stream_window_stage_usec: Dictionary = {}
+# DM12 opt-in main-thread frame attribution. Per-frame timings are never
+# computed/printed during ordinary gameplay unless explicitly enabled.
+var _dm12_trace_enabled := false
+var _dm12_frame_id := 0
+var _dm12_frame_stage_usec: Dictionary = {}
+var _dm12_previous_stage_usec: Dictionary = {}
+var _dm12_previous_process_usec := 0
+var _dm12_publish_region_count := 0
+var _dm12_publish_region_usec := 0
+var _dm12_publish_region_max_usec := 0
+var _dm12_visual_publish_count := 0
+var _dm12_visual_publish_usec := 0
+var _dm12_coarse_publish_count := 0
+var _dm12_canonical_mesh_uploaded := 0
+var _dm12_progressive_publish_count := 0
+var _dm12_last_visual_publish_usec := 0
+var _dm12_spike_trace_count := 0
+var _dm12_spike_trace_limit := 600
 var _stream_window_dispatch_blockers: Dictionary = {}
 var _stream_window_skipped_load_stages := 0
 var _stream_window_skipped_then_dispatched := 0
@@ -417,6 +435,9 @@ func _ready() -> void:
 		_dm9_visual_worker_limit = clampi(int(OS.get_environment("SANDBOX_DM9_VISUAL_WORKERS")), 1, DM9VisualBudget.MAX_WORKERS)
 	_dm9_visual_adaptive = _dm3_enabled() and OS.get_environment("SANDBOX_DM9_VISUAL_ADAPTIVE") == "1"
 	_dm9_fast_b4 = _dm3_enabled() and OS.get_environment("SANDBOX_DM9_FAST_B4") == "1"
+	_dm12_trace_enabled = _perf_trace_enabled and OS.get_environment("SANDBOX_DM12_FRAME_TRACE") == "1"
+	if _dm12_trace_enabled:
+		print("DM12_FRAME_TRACE: enabled=1 per_frame_stage=1 previous_frame_delta=1 publication_correlation=1")
 	_dm11_visual_dedicated = _dm3_enabled() and OS.get_environment("SANDBOX_DM11_VISUAL_LANE") == "1"
 	if _dm11_visual_dedicated:
 		print("DM11_VISUAL_LANE: isolated_native_threads=1 priority=low canonical_worker_pool_unchanged=1")
@@ -1068,6 +1089,60 @@ func _stream_stage_measure(stage: String, started_usec: int) -> void:
 		return
 	var elapsed := maxi(0, Time.get_ticks_usec() - started_usec)
 	_stream_window_stage_usec[stage] = int(_stream_window_stage_usec.get(stage, 0)) + elapsed
+	if _dm12_trace_enabled:
+		_dm12_frame_stage_usec[stage] = int(_dm12_frame_stage_usec.get(stage, 0)) + elapsed
+
+
+
+func _dm12_stage(stage: String, started_usec: int) -> void:
+	if not _dm12_trace_enabled:
+		return
+	_dm12_frame_stage_usec[stage] = int(
+		_dm12_frame_stage_usec.get(stage, 0)
+	) + maxi(0, Time.get_ticks_usec() - started_usec)
+
+
+func _dm12_emit_frame_if_spike(started_usec: int) -> void:
+	if not _dm12_trace_enabled:
+		return
+	var finished_usec := Time.get_ticks_usec()
+	var process_usec := maxi(0, finished_usec - started_usec)
+	var delta_spike := _last_frame_ms >= 33.0
+	var work_spike := process_usec >= 14_000
+	if (delta_spike or work_spike) and _dm12_spike_trace_count < _dm12_spike_trace_limit:
+		_dm12_spike_trace_count += 1
+		var accounted_usec := 0
+		for duration_value in _dm12_frame_stage_usec.values():
+			accounted_usec += int(duration_value)
+		PerformanceTrace.emit("dm12_frame_attribution", {
+			"frame_id": _dm12_frame_id,
+			"delta_previous_frame_ms": _last_frame_ms,
+			"current_process_usec": process_usec,
+			"prior_process_usec": _dm12_previous_process_usec,
+			"stages_usec": _dm12_frame_stage_usec.duplicate(),
+			"prior_stages_usec": _dm12_previous_stage_usec.duplicate(),
+			"stage_sum_usec": accounted_usec,
+			"unaccounted_current_usec": maxi(0, process_usec - accounted_usec),
+			"canonical_regions_committed": _dm12_publish_region_count,
+			"canonical_publish_total_usec": _dm12_publish_region_usec,
+			"canonical_publish_max_usec": _dm12_publish_region_max_usec,
+			"canonical_chunk_uploads": _dm12_canonical_mesh_uploaded,
+			"progressive_chunks_published": _dm12_progressive_publish_count,
+			"visual_high_regions_published": _dm12_visual_publish_count,
+			"visual_high_publish_total_usec": _dm12_visual_publish_usec,
+			"coarse_previews_published": _dm12_coarse_publish_count,
+			"mesh_jobs_in_flight": _mesh_jobs.size(),
+			"visual_jobs_in_flight": _dm3_shell_jobs.size(),
+			"loading_regions": loading_regions.size(),
+			"active_regions": active_regions.size(),
+			"focus": [focus_region_key.x, focus_region_key.y],
+			"speed_mps": _last_f10_speed_mps,
+			"trace_emitted": _dm12_spike_trace_count,
+			"delta_is_previous_frame": true,
+			"current_process_wall_only": true,
+		})
+	_dm12_previous_stage_usec = _dm12_frame_stage_usec.duplicate()
+	_dm12_previous_process_usec = process_usec
 
 
 func _stream_finish_frame() -> void:
@@ -1209,6 +1284,17 @@ func _stream_finish_frame() -> void:
 
 func _process(delta: float) -> void:
 	var process_started_usec := Time.get_ticks_usec()
+	if _dm12_trace_enabled:
+		_dm12_frame_id += 1
+		_dm12_frame_stage_usec.clear()
+		_dm12_publish_region_count = 0
+		_dm12_publish_region_usec = 0
+		_dm12_publish_region_max_usec = 0
+		_dm12_visual_publish_count = 0
+		_dm12_visual_publish_usec = 0
+		_dm12_coarse_publish_count = 0
+		_dm12_canonical_mesh_uploaded = 0
+		_dm12_progressive_publish_count = 0
 	_process_pending_simulation_save()
 	_mesh_uploads_this_frame = 0
 	_mesh_dispatches_this_frame = 0
@@ -1244,6 +1330,7 @@ func _process(delta: float) -> void:
 		if free_explore_enabled else 0.0
 	)
 	var stream_preflight_started_usec := Time.get_ticks_usec()
+	_dm12_stage("pre_stream", process_started_usec)
 	_update_focus_key()
 	# R3's speculative stage strip is derived entirely from the F10 camera.
 	# It is never authoritative, never extends beyond the existing retained 5x5
@@ -1354,8 +1441,11 @@ func _process(delta: float) -> void:
 		_refresh_placement_target_indicator()
 	if _diagnostics_refresh_elapsed >= DIAGNOSTICS_REFRESH_INTERVAL:
 		_diagnostics_refresh_elapsed = 0.0
+		var dm12_diagnostics_started_usec := Time.get_ticks_usec()
 		_update_runtime_diagnostics()
 		_update_status()
+		_dm12_stage("diagnostics", dm12_diagnostics_started_usec)
+	_dm12_emit_frame_if_spike(process_started_usec)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -3107,6 +3197,8 @@ func _process_coarse_previews() -> void:
 				var publish_usec := Time.get_ticks_usec() - started_usec
 				_stream_window_coarse_publish_usec += publish_usec
 				_stream_window_coarse_published += 1
+				if _dm12_trace_enabled:
+					_dm12_coarse_publish_count += 1
 				if _perf_trace_enabled:
 					var stage: Dictionary = loading_regions[id]
 					var key: Vector2i = record["region_key"]
@@ -3343,6 +3435,8 @@ func _process_progressive_chunk_publications() -> void:
 			_hide_coarse_patch_for_definitive_chunk(id, coordinate)
 			_progressive_chunk_published_total += 1
 			_stream_window_progressive_published += 1
+			if _dm12_trace_enabled:
+				_dm12_progressive_publish_count += 1
 			published += 1
 			if _perf_trace_enabled:
 				PerformanceTrace.emit("terrain_chunk_progressive_visible", {
@@ -3361,12 +3455,22 @@ func _process_progressive_chunk_publications() -> void:
 
 
 func _process_one_chunk_job() -> void:
+	var started_usec := Time.get_ticks_usec()
 	_prune_progressive_chunks()
+	_dm12_stage("mesh_prune", started_usec)
+	started_usec = Time.get_ticks_usec()
 	_process_progressive_chunk_publications()
+	_dm12_stage("mesh_progressive", started_usec)
+	started_usec = Time.get_ticks_usec()
 	_process_completed_mesh_jobs()
+	_dm12_stage("mesh_completed", started_usec)
+	started_usec = Time.get_ticks_usec()
 	_dispatch_mesh_jobs()
+	_dm12_stage("mesh_dispatch", started_usec)
 	if loading_regions.is_empty() and global_rebuild_pending:
+		started_usec = Time.get_ticks_usec()
 		_try_commit_global_rebuild()
+		_dm12_stage("mesh_global_commit", started_usec)
 
 
 func _process_completed_mesh_jobs() -> void:
@@ -3520,6 +3624,8 @@ func _process_completed_mesh_jobs() -> void:
 		_last_mesh_upload_ms = float(upload_elapsed_usec) / 1000.0
 		_peak_mesh_upload_ms = maxf(_peak_mesh_upload_ms, _last_mesh_upload_ms)
 		_mesh_uploads_this_frame += 1
+		if _dm12_trace_enabled:
+			_dm12_canonical_mesh_uploaded += 1
 		var cpu_timings: Dictionary = result.get("timings_usec", {})
 		var cpu_work_usec := int(cpu_timings.get("sdf_and_ledger", 0)) \
 			+ int(cpu_timings.get("triangulation_and_face_normals", 0)) \
@@ -4220,6 +4326,10 @@ func _publish_region(
 		placement_invalidate_usec = Time.get_ticks_usec() - placement_invalidate_started_usec
 
 	var publish_duration_usec := Time.get_ticks_usec() - publish_started_usec
+	if _dm12_trace_enabled:
+		_dm12_publish_region_count += 1
+		_dm12_publish_region_usec += publish_duration_usec
+		_dm12_publish_region_max_usec = maxi(_dm12_publish_region_max_usec, publish_duration_usec)
 	var measured_top_level_usec := (
 		chunk_commit_usec
 		+ stale_release_usec
@@ -5211,6 +5321,9 @@ func _dm3_process_shells() -> void:
 				_dm3_shell_lod_promoted += 1
 			_dm3_shell_built += 1
 			_dm9_shell_completed_total += 1
+			if _dm12_trace_enabled:
+				_dm12_visual_publish_count += 1
+				_dm12_visual_publish_usec += Time.get_ticks_usec() - dm9_shell_publish_started_usec
 			if _perf_trace_enabled:
 				PerformanceTrace.emit("dm9_visual_shell_complete", {
 					"region": [key.x, key.y],
