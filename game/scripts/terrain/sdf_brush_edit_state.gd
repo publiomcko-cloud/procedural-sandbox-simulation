@@ -621,6 +621,45 @@ static func sample_density_snapshot(
 	return density
 
 
+## DM11 experimental immutable worker sampler. The caller computes an exact
+## SdfWorld base density once per node from an XZ cached field and unpacks
+## snapshot arrays once per chunk. Materialized overrides, ordered brush ops,
+## validated anchored effects, and the cave clip retain the original ordering.
+## Non-production until exact brush/effect/tile/cave lattice parity qualifies.
+static func sample_density_snapshot_from_base(
+	base_density: float,
+	region_key: Vector2i,
+	local_position: Vector3,
+	show_cave_section: bool,
+	centers: PackedVector3Array,
+	radii: PackedFloat64Array,
+	modes: PackedByteArray,
+	materialized_tiles: Variant,
+	materialized_index: Variant,
+	effect_frames_value: Variant
+) -> float:
+	var world_position := SPATIAL.region_local_to_world(region_key, local_position)
+	var materialized_density := _sample_materialized_density(
+		world_position, materialized_tiles, materialized_index
+	)
+	var density := materialized_density if materialized_density != INF else base_density
+	if centers.size() != radii.size() or centers.size() != modes.size():
+		return NAN
+	for index in range(centers.size()):
+		var distance_to_surface := world_position.distance_to(centers[index]) - radii[index]
+		if modes[index] == Mode.CARVE:
+			density = minf(density, distance_to_surface)
+		else:
+			density = maxf(density, -distance_to_surface)
+	if typeof(effect_frames_value) == TYPE_ARRAY:
+		density = TerrainEffectFrame.compose_frames_prevalidated(
+			density, effect_frames_value, region_key, local_position
+		)
+	if show_cave_section:
+		density = minf(density, 6.0 - world_position.z)
+	return density
+
+
 static func build_materialized_tile_index(tiles_value: Variant) -> Dictionary:
 	var result: Dictionary = {}
 	if typeof(tiles_value) != TYPE_ARRAY:
