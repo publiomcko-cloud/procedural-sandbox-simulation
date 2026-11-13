@@ -69,8 +69,8 @@ func _run() -> void:
 		"one rollup instead of nine events")
 	for i in range(9):
 		var key := Vector2i(i, -7)
-		var before := baseline.load_scope(key)
-		var after := candidate.load_scope(key)
+		var before: Dictionary = baseline.load_scope(key)
+		var after: Dictionary = candidate.load_scope(key)
 		_check(before.get("ok", false) and after.get("ok", false),
 			"both can reactivate dormant source")
 		_check(before.get("dormant_cache_hit", false) and
