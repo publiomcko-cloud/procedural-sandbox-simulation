@@ -1,9 +1,9 @@
-name: DM9 SDF and Surface Nets hotpath qualification (EXPERIMENT)
+name: DM9 SDF + Surface Nets fast polygonization qualification (EXPERIMENT)
 
 on:
   push:
     branches:
-      - exp/dm9-sdf-surface-nets-hotpath
+      - exp/dm9-surface-nets-fast-edges
   workflow_dispatch:
 
 concurrency:
@@ -160,8 +160,9 @@ jobs:
       - name: Qualified Windows GPU user session
         shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
         run: |
-          & .\scripts\ci\p5-gpu-session-preflight.ps1 -Role Interactive
-          if ($LASTEXITCODE -ne 0) { throw 'GPU interactive preflight failed' }
+          $result = & .\scripts\ci\p5-gpu-session-preflight.ps1 -Role Interactive 2>&1 | Out-String
+          Write-Host $result
+          if (-not $result.Contains('P5_GPU_INTERACTIVE_SESSION_PASS')) { throw 'GPU interactive preflight failed' }
       - name: B4 fast pristine HIGH rendered smoke
         shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
         timeout-minutes: 20
