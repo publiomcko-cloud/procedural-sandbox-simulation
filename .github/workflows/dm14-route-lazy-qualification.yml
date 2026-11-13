@@ -1,0 +1,170 @@
+name: DM14 bounded inactive effect route cleanup qualification
+
+on:
+  push:
+    branches:
+      - exp/dm14-lazy-route-cleanup
+  workflow_dispatch:
+
+concurrency:
+  group: dm14-lazy-route-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 55
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+      SANDBOX_TERRAIN_BACKEND: b4
+      SANDBOX_DM9_FAST_B4: '1'
+      SANDBOX_DM9_PREFETCH: '0'
+      SANDBOX_DM9_VISUAL_ADAPTIVE: '1'
+      SANDBOX_DM9_VISUAL_WORKERS: '4'
+      SANDBOX_DM11_CANONICAL_FAST_B4: '1'
+      SANDBOX_DM11_VISUAL_LANE: '0'
+      SANDBOX_DM12_SURFACE_SLICE: '1'
+      SANDBOX_DM12_FRAME_TRACE: '0'
+      SANDBOX_DM13_WATER_WORKERS: '1'
+      SANDBOX_DM13_WATER_NATIVE: '1'
+      SANDBOX_DM14_EFFECT_TRACE: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Import and parse effect runtime
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          & $env:GODOT_BIN --headless --editor --path .\game --import
+          if ($LASTEXITCODE -ne 0) { throw 'DM14 import failed' }
+          foreach ($file in @(
+            'res://scripts/terrain/terrain_object_effect_runtime.gd',
+            'res://scripts/terrain/dm14_effect_dense_window.gd',
+            'res://scripts/terrain/terrain_object_effect_projection_service.gd',
+            'res://scripts/terrain/terrain_object_effect_local_frame_index.gd',
+            'res://tests/experiments/dm14_lazy_route_cleanup_contract.gd',
+            'res://tests/experiments/dm14_effect_dense_window_contract.gd'
+          )) {
+            & $env:GODOT_BIN --headless --path .\game --check-only --script $file
+            if ($LASTEXITCODE -ne 0) { throw "DM14 GDScript parse failed: $file" }
+          }
+          Write-Host 'DM14_PARSE_PASS'
+      - name: Projection and effect lifecycle regression
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        timeout-minutes: 20
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'dm14-contract'
+          New-Item -Path $root -ItemType Directory -Force | Out-Null
+          # Godot 4.7.2 can emit a benign ObjectDB warning to stderr on exit;
+          # PowerShell 5.1 must capture its exit code and test receipt instead of
+          # turning native stderr into a terminating NativeCommandError.
+          $ErrorActionPreference = 'Continue'
+          foreach ($case in @(
+            @{name='dm14-routes'; file='res://tests/experiments/dm14_lazy_route_cleanup_contract.gd'; receipt='DM14_ROUTE_CONTRACT_PASS'},
+            @{name='dm14-dense'; file='res://tests/experiments/dm14_effect_dense_window_contract.gd'; receipt='DM14_DENSE_CONTRACT_PASS'},
+            @{name='d4-1'; file='res://tests/issue108_d4_1_dormant_projection_scope_cache_tests.gd'; receipt='ISSUE108_D4_1'},
+            @{name='d7-3'; file='res://tests/issue108_d7_3_projection_source_cache_tests.gd'; receipt='ISSUE108_D7_3'}
+          )) {
+            $out = & $env:GODOT_BIN --headless --path .\game --script $case.file 2>&1 | Out-String
+            $out | Set-Content (Join-Path $root "$($case.name).log") -Encoding UTF8
+            Write-Host $out
+            if ($LASTEXITCODE -ne 0 -or $out -match 'FAIL:|SCRIPT ERROR:|Parse Error:' -or
+                -not $out.Contains($case.receipt)) {
+              throw "DM14 regression failed: $($case.name)"
+            }
+          }
+          Write-Host 'DM14_REGRESSION_PASS'
+      - name: Identical seed motion and idle factorial with tracing disabled
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        timeout-minutes: 45
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'dm14-route-ab'
+          $env:SANDBOX_DM14_EFFECT_TRACE = '0'
+          $env:SANDBOX_DM14_DENSE_REQUIRED = '1'
+          $cases = @(
+            @{label='A-motion'; route='outback-18'; frames=720; fast='0'},
+            @{label='B-motion'; route='outback-18'; frames=720; fast='1'},
+            @{label='B-idle'; route='idle'; frames=3600; fast='1'},
+            @{label='A-idle'; route='idle'; frames=3600; fast='0'},
+            @{label='B-motion2'; route='outback-18'; frames=720; fast='1'},
+            @{label='A-motion2'; route='outback-18'; frames=720; fast='0'}
+          )
+          $result = @()
+          foreach ($trial in $cases) {
+            $env:SANDBOX_DM14_LAZY_ROUTES = $trial.fast
+            $dir = Join-Path $root $trial.label
+            & .\scripts\perf\run-p5-deterministic-stream-benchmark.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $dir -Frames $trial.frames -Routes @($trial.route) -Profiles @('adaptive-skip-progressive') -CaptureProcessCpu
+            if ($LASTEXITCODE -ne 0) { throw "DM14 trial process failed: $($trial.label)" }
+            $name = "01-$($trial.route)-adaptive-skip-progressive"
+            $m = Get-Content (Join-Path $dir "$name.metrics.json") -Raw | ConvertFrom-Json
+            if ([int]$m.seed -ne 424242 -or [int]$m.requested_frames -ne $trial.frames -or
+                [bool]$m.dm11_canonical_fast_b4_enabled -ne $true) {
+              throw "DM14 invariant failed: $($trial.label)"
+            }
+            $receipt = [ordered]@{
+              label=$trial.label; lazy_routes=$trial.fast; dense='1'; frames=$trial.frames;
+              frame_over33_pct=$m.frames_over_33_ms_pct;
+              frame_over20_pct=$m.frames_over_20_ms_pct;
+              avg_frame_ms=$m.avg_frame_ms;
+              canonical_missing_focus_pct=$m.f10_focus_missing_pct;
+              canonical_region_p95_ms=$m.region_load_p95_ms;
+              visual_high_completed=$m.dm9_visual_shell_complete_count;
+              full_high_elapsed_ms=$m.dm9_full_high_elapsed_ms;
+              process_cpu_mean_pct=$m.process_cpu_mean_pct_total_capacity;
+            }
+            $result += $receipt
+            Write-Host ('DM14_ROUTE_AB_CASE=' + ($receipt | ConvertTo-Json -Compress -Depth 6))
+          }
+          $result | ConvertTo-Json -Depth 9 | Set-Content (Join-Path $root 'dm14-route-summary.json') -Encoding UTF8
+          Write-Host 'DM14_ROUTE_AB_PASS'
+
+      - name: Compare exact effect-window stage reduction with profiling in both arms
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        timeout-minutes: 20
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'dm14-route-profile'
+          $env:SANDBOX_DM14_EFFECT_TRACE = '1'
+          $env:SANDBOX_DM14_DENSE_REQUIRED = '1'
+          foreach ($mode in @('0','1')) {
+            $env:SANDBOX_DM14_LAZY_ROUTES = $mode
+            $dir = Join-Path $root ("mode-" + $mode)
+            & .\scripts\perf\run-p5-deterministic-stream-benchmark.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $dir -Frames 720 -Routes @('outback-18') -Profiles @('adaptive-skip-progressive')
+            $file = Join-Path $dir '01-outback-18-adaptive-skip-progressive.stdout.log'
+            $events = @()
+            foreach ($line in Get-Content -LiteralPath $file) {
+              if (-not $line.Contains('"event":"dm14_effect_window_stages"')) { continue }
+              $pos = $line.IndexOf('PERF_TRACE ')
+              if ($pos -ge 0) { $events += ($line.Substring($pos + 11) | ConvertFrom-Json) }
+            }
+            if ($events.Count -lt 3) { throw "DM14 profile missing $mode" }
+            $fastCount = @($events | Where-Object { [bool]$_.dm14_dense_used }).Count
+            if ($fastCount -ne $events.Count) { throw "DM14 dense baseline not active" }
+            $receipt = [ordered]@{
+              mode=$mode; count=$events.Count; fast_count=$fastCount;
+              window_total_ms=[Math]::Round((($events | ForEach-Object { [double]$_.window_duration_usec } | Measure-Object -Sum).Sum / 1000.0), 3);
+              required_total_ms=[Math]::Round((($events | ForEach-Object { [double]$_.required_usec } | Measure-Object -Sum).Sum / 1000.0), 3);
+              priority_total_ms=[Math]::Round((($events | ForEach-Object { [double]$_.priority_sort_usec } | Measure-Object -Sum).Sum / 1000.0), 3);
+              releases_total_ms=[Math]::Round((($events | ForEach-Object { [double]$_.eviction_release_usec } | Measure-Object -Sum).Sum / 1000.0), 3);
+              max_window_ms=[Math]::Round((($events | ForEach-Object { [double]$_.window_duration_usec } | Measure-Object -Maximum).Maximum / 1000.0), 3);
+            }
+            Write-Host ('DM14_ROUTE_PROFILE=' + ($receipt | ConvertTo-Json -Compress -Depth 5))
+          }
+          Write-Host 'DM14_ROUTE_PROFILE_PASS'
+      - name: Preserve source snapshots and trace receipts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm14-route-evidence
+          path: |
+            ${{ runner.temp }}\dm14-contract\*.log
+            ${{ runner.temp }}\dm14-route-ab\**\*.log
+            ${{ runner.temp }}\dm14-route-ab\**\*.json
+            ${{ runner.temp }}\dm14-route-profile\**\*.log
+            ${{ runner.temp }}\dm14-route-profile\**\*.json
+          retention-days: 14
+          if-no-files-found: warn
