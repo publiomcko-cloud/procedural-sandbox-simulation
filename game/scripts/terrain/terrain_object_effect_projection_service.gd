@@ -35,6 +35,11 @@ var initialized := false
 var initialization_error := ""
 var last_reconcile_metrics: Dictionary = {}
 var _perf_trace_enabled := false
+var _dm15_release_trace := false
+var _dm15_last_route_breakdown: Dictionary = {}
+var _dm15_release_count := 0
+var _dm15_release_total_usec := 0
+var _dm15_release_peak_usec := 0
 
 var _scopes: Dictionary = {}
 var _scope_indexes: Dictionary = {}
@@ -86,6 +91,11 @@ func initialize(
 	initialized = false
 	initialization_error = ""
 	_perf_trace_enabled = PerformanceTrace.is_enabled()
+	_dm15_release_trace = _perf_trace_enabled and OS.get_environment("SANDBOX_DM15_RELEASE_TRACE") == "1"
+	_dm15_last_route_breakdown.clear()
+	_dm15_release_count = 0
+	_dm15_release_total_usec = 0
+	_dm15_release_peak_usec = 0
 	_dm14_lazy_cleanup_enabled = OS.get_environment("SANDBOX_DM14_LAZY_ROUTES") == "1"
 	_dm14_route_cleanup.clear()
 	_dm14_cleanup_keys_total = 0
@@ -238,6 +248,20 @@ func release_scope(
 	var scope_id := Contract.scope_id_for_region(region_key)
 	if not _scopes.has(scope_id):
 		return
+	var dm15_started := Time.get_ticks_usec() if _dm15_release_trace else 0
+	var dm15_stage := dm15_started
+	var dm15_enqueue_usec := 0
+	var dm15_route_usec := 0
+	var dm15_map_erase_usec := 0
+	var dm15_dormant_usec := 0
+	var dm15_counter_usec := 0
+	var dm15_queued := false
+	var dm15_effect_count := (
+		(_scopes[scope_id]["effects"] as Dictionary).size() if _dm15_release_trace else 0
+	)
+	var dm15_pending_before := _dm14_route_cleanup.size() if _dm15_release_trace else 0
+	if _dm15_release_trace:
+		_dm15_last_route_breakdown.clear()
 	if _dm14_lazy_cleanup_enabled \
 	and _dm14_route_cleanup.size() < DM14_MAX_PENDING_CLEANUPS:
 		# The visible source scope and index are still immediately erased
@@ -250,22 +274,61 @@ func release_scope(
 			"prepared": false,
 		})
 		_dm14_pending_peak = maxi(_dm14_pending_peak, _dm14_route_cleanup.size())
+		dm15_queued = true
 	else:
 		if _dm14_lazy_cleanup_enabled:
 			_dm14_cleanup_fallback_sync += 1
 		_remove_scope_routes(scope_id)
+	if _dm15_release_trace:
+		if dm15_queued:
+			dm15_enqueue_usec = Time.get_ticks_usec() - dm15_stage
+		else:
+			dm15_route_usec = Time.get_ticks_usec() - dm15_stage
+		dm15_stage = Time.get_ticks_usec()
 	var snapshot: Dictionary = _scopes[scope_id]
 	var index: RefCounted = _scope_indexes[scope_id]
 	var generation := int(_storage_generations.get(scope_id, 0))
 	_scopes.erase(scope_id)
 	_scope_indexes.erase(scope_id)
 	_storage_generations.erase(scope_id)
+	if _dm15_release_trace:
+		dm15_map_erase_usec = Time.get_ticks_usec() - dm15_stage
+		dm15_stage = Time.get_ticks_usec()
 	if retain_dormant:
 		_remember_dormant_scope(scope_id, snapshot, index, generation)
 	else:
 		_dormant_scopes.erase(scope_id)
 		_dormant_scope_order.erase(scope_id)
+	if _dm15_release_trace:
+		dm15_dormant_usec = Time.get_ticks_usec() - dm15_stage
+		dm15_stage = Time.get_ticks_usec()
 	_performance["scope_release_count"] = int(_performance["scope_release_count"]) + 1
+	if _dm15_release_trace:
+		dm15_counter_usec = Time.get_ticks_usec() - dm15_stage
+		var dm15_total_usec := Time.get_ticks_usec() - dm15_started
+		_dm15_release_count += 1
+		_dm15_release_total_usec += dm15_total_usec
+		_dm15_release_peak_usec = maxi(_dm15_release_peak_usec, dm15_total_usec)
+		PerformanceTrace.emit("dm15_effect_release_detail", {
+			"scope_id": scope_id,
+			"total_usec": dm15_total_usec,
+			"route_usec": dm15_route_usec,
+			"enqueue_usec": dm15_enqueue_usec,
+			"route_enumerate_usec": int(_dm15_last_route_breakdown.get("enumerate_usec", 0)),
+			"route_unlink_usec": int(_dm15_last_route_breakdown.get("unlink_usec", 0)),
+			"route_key_count": int(_dm15_last_route_breakdown.get("route_key_count", 0)),
+			"route_memberships": int(_dm15_last_route_breakdown.get("route_memberships", 0)),
+			"scope_map_erase_usec": dm15_map_erase_usec,
+			"dormant_usec": dm15_dormant_usec,
+			"counter_usec": dm15_counter_usec,
+			"effect_count": dm15_effect_count,
+			"retain_dormant": retain_dormant,
+			"queued_lazy": dm15_queued,
+			"lazy_pending_before": dm15_pending_before,
+			"lazy_pending_after": _dm14_route_cleanup.size(),
+			"dormant_count": _dormant_scopes.size(),
+			"resident_after": _scopes.size(),
+		})
 
 
 func purge_dormant_scopes() -> void:
@@ -1014,6 +1077,10 @@ func get_performance_snapshot() -> Dictionary:
 	result["resident_scope_count"] = _scopes.size()
 	result["reverse_route_chunk_count"] = _scope_ids_by_chunk.size()
 	result["dm14_lazy_route_cleanup"] = _dm14_lazy_cleanup_enabled
+	result["dm15_release_trace"] = _dm15_release_trace
+	result["dm15_release_count"] = _dm15_release_count
+	result["dm15_release_total_usec"] = _dm15_release_total_usec
+	result["dm15_release_peak_usec"] = _dm15_release_peak_usec
 	result["dm14_cleanup_pending"] = _dm14_route_cleanup.size()
 	result["dm14_cleanup_peak_pending"] = _dm14_pending_peak
 	result["dm14_cleanup_keys_total"] = _dm14_cleanup_keys_total
@@ -1195,15 +1262,28 @@ func _dm14_flush_pending_for_scope(scope_id: String) -> void:
 func _remove_scope_routes(scope_id: String) -> void:
 	if not _scope_indexes.has(scope_id):
 		return
+	var dm15_start := Time.get_ticks_usec() if _dm15_release_trace else 0
 	var index: RefCounted = _scope_indexes[scope_id]
-	for chunk_id_value in index.get_all_indexed_chunk_ids():
+	var keys: Array[String] = index.get_all_indexed_chunk_ids()
+	var dm15_scan_usec := Time.get_ticks_usec() - dm15_start if _dm15_release_trace else 0
+	var dm15_memberships := 0
+	for chunk_id_value in keys:
 		var chunk_id := String(chunk_id_value)
 		var ids: Array = _scope_ids_by_chunk.get(chunk_id, [])
+		if _dm15_release_trace:
+			dm15_memberships += ids.size()
 		ids.erase(scope_id)
 		if ids.is_empty():
 			_scope_ids_by_chunk.erase(chunk_id)
 		else:
 			_scope_ids_by_chunk[chunk_id] = ids
+	if _dm15_release_trace:
+		_dm15_last_route_breakdown = {
+			"enumerate_usec": dm15_scan_usec,
+			"unlink_usec": Time.get_ticks_usec() - dm15_start - dm15_scan_usec,
+			"route_key_count": keys.size(),
+			"route_memberships": dm15_memberships,
+		}
 
 
 func _source_revision(
