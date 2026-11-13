@@ -51,6 +51,10 @@ jobs:
         run: |
           $root = Join-Path $env:RUNNER_TEMP 'dm14-contract'
           New-Item -Path $root -ItemType Directory -Force | Out-Null
+          # Godot 4.7.2 can emit a benign ObjectDB warning to stderr on exit;
+          # PowerShell 5.1 must capture its exit code and test receipt instead of
+          # turning native stderr into a terminating NativeCommandError.
+          $ErrorActionPreference = 'Continue'
           foreach ($case in @(
             @{name='d4-1'; file='res://tests/issue108_d4_1_dormant_projection_scope_cache_tests.gd'; receipt='ISSUE108_D4_1'},
             @{name='d7-3'; file='res://tests/issue108_d7_3_projection_source_cache_tests.gd'; receipt='ISSUE108_D7_3'}
