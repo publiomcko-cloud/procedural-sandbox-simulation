@@ -1,0 +1,111 @@
+name: DM19 warmup-controlled 18mps steady-state attribution
+on:
+  push:
+    branches:
+      - exp/dm19-warm-steady-state-attribution
+  workflow_dispatch:
+concurrency:
+  group: dm19-warm-steady-state
+  cancel-in-progress: true
+permissions:
+  contents: read
+
+jobs:
+  exact:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 25
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: PowerShell 5.1 parse and Godot 4.7.2 import/parse
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          $path=(Resolve-Path .\scripts\perf\run-dm19-warmup-stationary-abba.ps1).Path
+          $tokens=$null
+          $errors=$null
+          [void][System.Management.Automation.Language.Parser]::ParseFile($path,[ref]$tokens,[ref]$errors)
+          if ($errors.Count -gt 0) { Write-Host ($errors | Out-String); throw 'DM19_PS_PARSE_FAILED' }
+          & $env:GODOT_BIN --headless --editor --path .\game --import
+          if ($LASTEXITCODE -ne 0) { throw 'DM19_IMPORT_FAILED' }
+          foreach($file in @(
+            'res://scripts/diagnostics/dm19_cold_attribution.gd',
+            'res://scripts/terrain/terrain_demo.gd',
+            'res://tests/experiments/dm19_cold_attribution_contract.gd'
+          )){
+            & $env:GODOT_BIN --headless --path .\game --check-only --script $file
+            if ($LASTEXITCODE -ne 0){throw "DM19_GODOT_PARSE_FAILED $file"}
+          }
+          Write-Host 'DM19_PARSE_PASS'
+      - name: Attribution math and canonical region/geometry regressions
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          foreach($case in @(
+            @{file='res://tests/experiments/dm19_cold_attribution_contract.gd';receipt='DM19_COLD_PROFILE_PASS'},
+            @{file='res://tests/experiments/dm18_canonical_cache_contract.gd';receipt='DM18_CANONICAL_CACHE_PASS'},
+            @{file='res://tests/experiments/dm17_sparse_lattice_contract.gd';receipt='DM17_SPARSE_LATTICE_PASS'},
+            @{file='res://tests/experiments/dm11_canonical_b4_parity.gd';receipt='DM11_CANONICAL_PARITY_PASS'}
+          )){
+            $out= & $env:GODOT_BIN --headless --path .\game --script $case.file 2>&1 | Out-String
+            Write-Host $out
+            if($LASTEXITCODE -ne 0 -or -not $out.Contains($case.receipt) -or
+                $out -match 'SCRIPT ERROR:|Parse Error:|DM19_COLD_PROFILE_FAILURE'){
+              throw "DM19_TEST_FAILED $($case.file)"
+            }
+          }
+          Write-Host 'DM19_EXACT_PASS'
+
+  benchmark:
+    needs: exact
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 45
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+      SANDBOX_TERRAIN_BACKEND: b4
+      SANDBOX_DM9_FAST_B4: '1'
+      SANDBOX_DM9_PREFETCH: '0'
+      SANDBOX_DM9_VISUAL_ADAPTIVE: '1'
+      SANDBOX_DM9_VISUAL_WORKERS: '4'
+      SANDBOX_DM11_CANONICAL_FAST_B4: '1'
+      SANDBOX_DM11_VISUAL_LANE: '0'
+      SANDBOX_DM12_SURFACE_SLICE: '1'
+      SANDBOX_DM12_FRAME_TRACE: '0'
+      SANDBOX_DM13_WATER_WORKERS: '1'
+      SANDBOX_DM13_WATER_NATIVE: '1'
+      SANDBOX_DM14_DENSE_REQUIRED: '1'
+      SANDBOX_DM14_LAZY_ROUTES: '0'
+      SANDBOX_DM15_DORMANT_ROLLUP: '1'
+      SANDBOX_DM15_RELEASE_TRACE: '0'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Fresh engine import
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          & $env:GODOT_BIN --headless --editor --path .\game --import
+          if ($LASTEXITCODE -ne 0){throw 'DM19_BENCH_IMPORT_FAILED'}
+      - name: Cold initial start versus stationary 900-frame prewarm at 18mps
+        timeout-minutes: 40
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          & .\scripts\perf\run-dm19-warmup-stationary-abba.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir (Join-Path $env:RUNNER_TEMP 'dm19-warmup') -ColdPairs 6
+          if($LASTEXITCODE -ne 0){throw 'DM19_BENCHMARK_FAILED'}
+          Write-Host 'DM19_WARMUP_BENCHMARK_PASS'
+      - name: Preserve raw evidence and failure receipts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm19-warmup-attribution-evidence
+          path: |
+            ${{ runner.temp }}\dm19-warmup\**\*.log
+            ${{ runner.temp }}\dm19-warmup\**\*.json
+            ${{ runner.temp }}\dm19-warmup\*.json
+          retention-days: 21
+          if-no-files-found: warn
