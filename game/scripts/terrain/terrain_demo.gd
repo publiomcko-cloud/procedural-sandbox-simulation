@@ -489,7 +489,7 @@ func _ready() -> void:
 				)
 				_stream_bench_warmup_remaining = _stream_bench_warmup_frames
 		if not _stream_bench_route.is_empty():
-			if _stream_bench_route not in ["idle", "straight-18", "straight-54", "outback-18", "outback-54"] \
+			if _stream_bench_route not in ["idle", "straight-2", "straight-18", "straight-54", "outback-18", "outback-54"] \
 			or _stream_bench_frames_goal < 120 or _stream_bench_frames_goal > 18000 \
 			or _stream_bench_warmup_frames < 0 or _stream_bench_warmup_frames > 12000:
 				push_error("P5_STREAM_BENCH_INVALID_ROUTE_OR_FRAMES")
@@ -2057,8 +2057,8 @@ func _process_free_exploration(delta: float) -> void:
 		if _stream_bench_route != "idle":
 			local_input.x = -1.0 if _stream_bench_route.begins_with("outback") \
 				and _stream_bench_frames_done >= _stream_bench_frames_goal / 2 else 1.0
-			_stream_bench_distance_m += (54.0 if _stream_bench_route.ends_with("54") else 18.0) * STREAM_BENCH_STEP_SEC
-		_apply_free_explore_motion(local_input, STREAM_BENCH_STEP_SEC, _stream_bench_route.ends_with("54"))
+			_stream_bench_distance_m += (2.0 if _stream_bench_route == "straight-2" else (54.0 if _stream_bench_route.ends_with("54") else 18.0)) * STREAM_BENCH_STEP_SEC
+		_apply_free_explore_motion(local_input, STREAM_BENCH_STEP_SEC, _stream_bench_route.ends_with("54"), 2.0 if _stream_bench_route == "straight-2" else -1.0)
 		_stream_bench_frames_done += 1
 		return
 	var local_input := Vector3.ZERO
@@ -2077,7 +2077,7 @@ func _process_free_exploration(delta: float) -> void:
 	_apply_free_explore_motion(local_input, delta, Input.is_key_pressed(KEY_CTRL))
 
 
-func _apply_free_explore_motion(local_input: Vector3, delta: float, boosted: bool = false) -> void:
+func _apply_free_explore_motion(local_input: Vector3, delta: float, boosted: bool = false, benchmark_speed_override: float = -1.0) -> void:
 	if not free_explore_enabled or not is_instance_valid(camera) or delta <= 0.0 or local_input.length_squared() <= 0.0:
 		return
 	var basis := camera.global_transform.basis
@@ -2093,7 +2093,7 @@ func _apply_free_explore_motion(local_input: Vector3, delta: float, boosted: boo
 	var world_direction := right * local_input.x + Vector3.UP * local_input.y + forward * -local_input.z
 	if world_direction.length_squared() <= 0.000001:
 		return
-	var speed := FREE_EXPLORE_SPEED * (FREE_EXPLORE_BOOST_MULTIPLIER if boosted else 1.0)
+	var speed := benchmark_speed_override if benchmark_speed_override >= 0.0 else FREE_EXPLORE_SPEED * (FREE_EXPLORE_BOOST_MULTIPLIER if boosted else 1.0)
 	camera.global_position += world_direction.normalized() * speed * delta
 	orbit_target = camera.global_position
 	_lod_selection_dirty = true
