@@ -1,0 +1,115 @@
+name: DM12 focus reconciliation and water frame internal hotspot trace
+
+on:
+  push:
+    branches:
+      - exp/dm12-focus-water-attribution
+  workflow_dispatch:
+
+concurrency:
+  group: dm12-focus-water-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  focused:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 45
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+      SANDBOX_TERRAIN_BACKEND: b4
+      SANDBOX_DM9_FAST_B4: '1'
+      SANDBOX_DM9_PREFETCH: '0'
+      SANDBOX_DM9_VISUAL_ADAPTIVE: '1'
+      SANDBOX_DM9_VISUAL_WORKERS: '4'
+      SANDBOX_DM11_CANONICAL_FAST_B4: '1'
+      SANDBOX_DM11_VISUAL_LANE: '0'
+      SANDBOX_DM12_FRAME_TRACE: '1'
+      SANDBOX_DM12_SURFACE_SLICE: '0'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Godot import and exact runtime script parse
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          & $env:GODOT_BIN --headless --editor --path .\game --import
+          if ($LASTEXITCODE -ne 0) { throw 'DM12 focus/water import failed' }
+          foreach ($file in @(
+            'res://scripts/terrain/terrain_demo.gd',
+            'res://scripts/simulation/environment_visual_presentation.gd'
+          )) {
+            & $env:GODOT_BIN --headless --path .\game --check-only --script $file
+            if ($LASTEXITCODE -ne 0) { throw "DM12 focus/water parse failed: $file" }
+          }
+      - name: Instrument exact focus transition and water rebuild work
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        timeout-minutes: 30
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'dm12-focus-water'
+          & .\scripts\perf\run-p5-deterministic-stream-benchmark.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $dir -Frames 960 -Routes @('outback-18') -Profiles @('adaptive-skip-progressive') -CaptureProcessCpu
+          $file = Join-Path $dir '01-outback-18-adaptive-skip-progressive.stdout.log'
+          $lines = @(Get-Content -LiteralPath $file)
+          $eventNames = @('dm12_frame_attribution', 'dm12_water_frame',
+            'dm12_water_rebuild_breakdown', 'terrain_window_reconcile')
+          $events = @{}
+          foreach ($name in $eventNames) { $events[$name] = @() }
+          foreach ($line in $lines) {
+            if (-not $line.Contains('PERF_TRACE ')) { continue }
+            $offset = $line.IndexOf('PERF_TRACE ')
+            try { $event = ($line.Substring($offset + 11) | ConvertFrom-Json) }
+            catch { continue }
+            $name = [string]$event.event
+            if ($events.ContainsKey($name)) { $events[$name] += $event }
+          }
+          if ($events['dm12_frame_attribution'].Count -lt 1 -or
+              $events['dm12_water_frame'].Count -lt 1 -or
+              $events['terrain_window_reconcile'].Count -lt 1) {
+            throw 'DM12 focus/water trace missing required event types'
+          }
+          $focus = @($events['dm12_frame_attribution'] | Where-Object { [double]$_.prior_stages_usec.focus_window_lookahead -ge 5000 })
+          $focusTotals = @{}
+          foreach ($stage in @('reconcile_focus_update','reconcile_effect_targets',
+            'reconcile_active_unload','reconcile_stage_transactions',
+            'reconcile_state_index','reconcile_runtime_diagnostics')) {
+            $vals = @($focus | ForEach-Object { [double]($_.prior_stages_usec.$stage) / 1000.0 })
+            $focusTotals[$stage] = [ordered]@{
+              sum_ms = [Math]::Round(($vals | Measure-Object -Sum).Sum, 2);
+              max_ms = [Math]::Round(($vals | Measure-Object -Maximum).Maximum, 2);
+            }
+          }
+          $waterRebuild = $events['dm12_water_rebuild_breakdown']
+          $waterStats = @{}
+          foreach ($field in @('derive_shoreline_usec','arraymesh_creation_usec','post_swap_bookkeeping_usec')) {
+            $vals = @($waterRebuild | ForEach-Object { [double]($_.$field) / 1000.0 })
+            $waterStats[$field] = [ordered]@{
+              sum_ms = [Math]::Round(($vals | Measure-Object -Sum).Sum, 2);
+              max_ms = [Math]::Round(($vals | Measure-Object -Maximum).Maximum, 2);
+            }
+          }
+          $receipt = [ordered]@{
+            focus_heavy_count = $focus.Count;
+            focus_stages = $focusTotals;
+            water_slow_frames = $events['dm12_water_frame'].Count;
+            water_slow_rebuilds = $waterRebuild.Count;
+            water_stages = $waterStats;
+            spikes_traced = $events['dm12_frame_attribution'].Count;
+            window_reconciles = $events['terrain_window_reconcile'].Count;
+          }
+          Write-Host ('DM12_FOCUS_WATER_RESULT=' + ($receipt | ConvertTo-Json -Compress -Depth 8))
+          $receipt | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $dir 'dm12-focus-water-summary.json') -Encoding UTF8
+          Write-Host 'DM12_FOCUS_WATER_PASS'
+      - name: Retain all correlation evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm12-focus-water
+          path: |
+            ${{ runner.temp }}\dm12-focus-water\*.log
+            ${{ runner.temp }}\dm12-focus-water\*.json
+          retention-days: 14
+          if-no-files-found: warn
