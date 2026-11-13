@@ -8,7 +8,7 @@ class_name EnvironmentVisualPresentation
 const EnvironmentStore := preload("res://scripts/simulation/environment_state_store.gd")
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
 const OceanVisual := preload("res://scripts/simulation/environment_ocean_visual_domain.gd")
-const DM13WaterJob := preload("res://scripts/simulation/dm13_water_geometry_job.gd")
+
 
 const MAX_CELLS_PER_REGION := 48
 const SHORELINE_SUBDIVISIONS := 2
@@ -56,6 +56,7 @@ var _peak_rebuild_usec := 0
 var _trace_enabled := false
 var _water_debug_mode := "normal"
 var _dm13_water_workers := false
+var _dm13_worker_script: Script = null
 var _dm13_water_jobs: Dictionary = {}
 var _dm13_water_pending_by_region: Dictionary = {}
 var _dm13_epoch := 0
@@ -74,6 +75,9 @@ func _ready() -> void:
 	_trace_enabled = PerformanceTrace.is_enabled()
 	_dm13_water_workers = OS.get_environment("SANDBOX_DM13_WATER_WORKERS") == "1"
 	if _dm13_water_workers:
+		# Runtime-only load avoids a circular GDScript preload: the CPU job
+		# invokes this presentation class's existing static pure derivation.
+		_dm13_worker_script = load("res://scripts/simulation/dm13_water_geometry_job.gd")
 		print("DM13_WATER_WORKERS: enabled=1 immutable_cpu=1 revision_gated=1 max_in_flight=2 no_authority_mutation=1")
 	var water_material := StandardMaterial3D.new()
 	water_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -1047,7 +1051,7 @@ func _dm13_queue_plan(
 	neighbor_signature: PackedByteArray, hydrology_enabled: bool
 ) -> void:
 	var snapshot_started := Time.get_ticks_usec()
-	var job := DM13WaterJob.new(
+	var job: RefCounted = _dm13_worker_script.new(
 		row["region_key"], environment, surface, row.get("shoreline", {}),
 		_water_debug_mode, hydrology_enabled, anchors
 	)
