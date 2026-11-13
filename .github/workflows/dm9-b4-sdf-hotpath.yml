@@ -93,7 +93,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'DM9 import failed' }
           $root = Join-Path $env:RUNNER_TEMP 'dm9-b4-visual-ab'
           $summary = @()
-          foreach ($name in @('A-idle','B-idle','B-motion','A-motion')) {
+          foreach ($name in @('A-idle','B-idle','B-motion','A-motion','A-motion2','B-motion2','B-motion3','A-motion3')) {
             $fast = $name.StartsWith('B')
             $route = if ($name.EndsWith('idle')) { 'idle' } else { 'outback-18' }
             $frames = if ($route -eq 'idle') { 3600 } else { 720 }
@@ -108,6 +108,7 @@ jobs:
               variant=$name; fast_b4=$fast;
               frames=$frames; visual_high_regions=$m.dm9_visual_shell_complete_count;
               visual_gap_final=$m.dm8_visual_gap_final_regions;
+              full_high_elapsed_ms=$m.dm9_full_high_elapsed_ms;
               visual_worker_p50_ms=$m.dm9_visual_shell_worker_p50_ms;
               visual_worker_p95_ms=$m.dm9_visual_shell_worker_p95_ms;
               precompute_p50_ms=$m.dm9_visual_precompute_p50_ms;
@@ -160,9 +161,10 @@ jobs:
       - name: Qualified Windows GPU user session
         shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
         run: |
-          $result = & .\scripts\ci\p5-gpu-session-preflight.ps1 -Role Interactive 2>&1 | Out-String
-          Write-Host $result
-          if (-not $result.Contains('P5_GPU_INTERACTIVE_SESSION_PASS')) { throw 'GPU interactive preflight failed' }
+          # This preflight uses Write-Host (host stream), which PowerShell 5.1
+          # does not reliably capture with Out-String. It throws on failed
+          # session validation, so do not inspect stale LASTEXITCODE/output.
+          & .\scripts\ci\p5-gpu-session-preflight.ps1 -Role Interactive
       - name: B4 fast pristine HIGH rendered smoke
         shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
         timeout-minutes: 20
