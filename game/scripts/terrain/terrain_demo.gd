@@ -2208,6 +2208,8 @@ func _process_free_exploration(delta: float) -> void:
 					"warmup_frames": _stream_bench_warmup_frames,
 					"distance_m": snappedf(_stream_bench_distance_m, 0.001),
 					"wallclock_route": _dm17_wallclock_route,
+					"dm17_sparse_block": OS.get_environment("SANDBOX_DM17_SPARSE_BLOCK") == "1",
+					"dm17_shared_lattice": OS.get_environment("SANDBOX_DM17_SHARED_LATTICE") == "1",
 					"wallclock_motion_seconds": snappedf(_dm17_motion_elapsed_sec, 0.000001),
 					"final_x_mm": roundi(camera.global_position.x * 1000.0),
 					"final_z_mm": roundi(camera.global_position.z * 1000.0),
