@@ -56,6 +56,8 @@ var _peak_rebuild_usec := 0
 var _trace_enabled := false
 var _water_debug_mode := "normal"
 var _dm13_water_workers := false
+var _dm13_native_lane := false
+var _dm13_next_native_task_id := -1
 var _dm13_worker_script: Script = null
 var _dm13_water_jobs: Dictionary = {}
 var _dm13_water_pending_by_region: Dictionary = {}
@@ -74,11 +76,12 @@ const DM13_MAX_PUBLICATIONS_PER_FRAME := 1
 func _ready() -> void:
 	_trace_enabled = PerformanceTrace.is_enabled()
 	_dm13_water_workers = OS.get_environment("SANDBOX_DM13_WATER_WORKERS") == "1"
+	_dm13_native_lane = _dm13_water_workers and OS.get_environment("SANDBOX_DM13_WATER_NATIVE") == "1"
 	if _dm13_water_workers:
 		# Runtime-only load avoids a circular GDScript preload: the CPU job
 		# invokes this presentation class's existing static pure derivation.
 		_dm13_worker_script = load("res://scripts/simulation/dm13_water_geometry_job.gd")
-		print("DM13_WATER_WORKERS: enabled=1 immutable_cpu=1 revision_gated=1 max_in_flight=2 no_authority_mutation=1")
+		print("DM13_WATER_WORKERS: enabled=1 immutable_cpu=1 revision_gated=1 max_in_flight=%d native_low=%d no_authority_mutation=1" % [1 if _dm13_native_lane else 2, 1 if _dm13_native_lane else 0])
 	var water_material := StandardMaterial3D.new()
 	water_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	water_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -223,6 +226,7 @@ func get_visual_metrics() -> Dictionary:
 		"visible_shoreline_vertices": _count_visible_shoreline_vertices(),
 		"water_debug_mode": _water_debug_mode,
 		"dm13_water_workers": _dm13_water_workers,
+		"dm13_native_lane": _dm13_native_lane,
 		"dm13_jobs_in_flight": _dm13_water_jobs.size(),
 		"dm13_jobs_submitted_total": _dm13_submitted_total,
 		"dm13_jobs_completed_total": _dm13_completed_total,
@@ -928,7 +932,7 @@ func _poll_resident_regions() -> void:
 			continue
 		if _dm13_water_workers:
 			if not _dm13_water_pending_by_region.has(id) \
-			and _dm13_water_jobs.size() < DM13_MAX_IN_FLIGHT \
+			and _dm13_water_jobs.size() < (1 if _dm13_native_lane else DM13_MAX_IN_FLIGHT) \
 			and _dm13_submitted_this_frame < DM13_MAX_SUBMISSIONS_PER_FRAME:
 				_dm13_queue_plan(id, row, environment, surface, token,
 					signature, neighbor_anchors, neighbor_signature, hydrology_enabled)
@@ -1057,12 +1061,24 @@ func _dm13_queue_plan(
 		_water_debug_mode, hydrology_enabled, anchors
 	)
 	var snapshot_usec := Time.get_ticks_usec() - snapshot_started
-	var task_id := WorkerThreadPool.add_task(
-		Callable(job, "run"), false, "DM13 immutable shoreline geometry"
-	)
-	if task_id < 0:
-		return
+	var task_id := -1
+	var native_thread: Thread = null
+	if _dm13_native_lane:
+		native_thread = Thread.new()
+		var started := native_thread.start(Callable(job, "run"), Thread.PRIORITY_LOW)
+		if started != OK:
+			push_warning("DM13 native water worker could not start (%d)" % started)
+			return
+		task_id = _dm13_next_native_task_id
+		_dm13_next_native_task_id -= 1
+	else:
+		task_id = WorkerThreadPool.add_task(
+			Callable(job, "run"), false, "DM13 immutable shoreline geometry"
+		)
+		if task_id < 0:
+			return
 	_dm13_water_jobs[task_id] = {
+		"thread": native_thread,
 		"id": id,
 		"job": job,
 		"epoch": _dm13_epoch,
@@ -1079,7 +1095,8 @@ func _dm13_queue_plan(
 	if _trace_enabled:
 		PerformanceTrace.emit("dm13_water_job_submitted", {
 			"scope": id, "snapshot_usec": snapshot_usec,
-			"jobs_in_flight": _dm13_water_jobs.size()
+			"jobs_in_flight": _dm13_water_jobs.size(),
+			"lane": "native_low" if _dm13_native_lane else "worker_pool"
 		})
 
 
@@ -1088,14 +1105,23 @@ func _dm13_publish_ready() -> void:
 	var ready: Array[int] = []
 	for key_value in _dm13_water_jobs.keys():
 		var task_id := int(key_value)
-		if WorkerThreadPool.is_task_completed(task_id):
+		var record: Dictionary = _dm13_water_jobs[task_id]
+		var native_thread: Thread = record.get("thread", null)
+		if native_thread != null:
+			if not native_thread.is_alive():
+				ready.append(task_id)
+		elif WorkerThreadPool.is_task_completed(task_id):
 			ready.append(task_id)
 	ready.sort()
 	for task_id in ready:
 		if published >= DM13_MAX_PUBLICATIONS_PER_FRAME:
 			break
-		WorkerThreadPool.wait_for_task_completion(task_id)
 		var record: Dictionary = _dm13_water_jobs[task_id]
+		var native_thread: Thread = record.get("thread", null)
+		if native_thread != null:
+			native_thread.wait_to_finish()
+		else:
+			WorkerThreadPool.wait_for_task_completion(task_id)
 		_dm13_water_jobs.erase(task_id)
 		var id: String = record["id"]
 		if int(_dm13_water_pending_by_region.get(id, -1)) == task_id:
@@ -1138,6 +1164,7 @@ func _dm13_publish_ready() -> void:
 				"total_usec": Time.get_ticks_usec() - int(job.queued_usec),
 				"vertices": (plan.get("vertices", PackedVector3Array()) as PackedVector3Array).size(),
 				"worker_thread_id": int(job.worker_thread_id),
+				"lane": "native_low" if native_thread != null else "worker_pool",
 			})
 
 
@@ -1175,7 +1202,13 @@ func _dm13_water_current(id: String, record: Dictionary) -> bool:
 func _exit_tree() -> void:
 	# Drain all captured jobs before releasing their immutable data.
 	for task_id_value in _dm13_water_jobs.keys():
-		WorkerThreadPool.wait_for_task_completion(int(task_id_value))
+		var task_id := int(task_id_value)
+		var record: Dictionary = _dm13_water_jobs[task_id]
+		var native_thread: Thread = record.get("thread", null)
+		if native_thread != null:
+			native_thread.wait_to_finish()
+		else:
+			WorkerThreadPool.wait_for_task_completion(task_id)
 	_dm13_water_jobs.clear()
 	_dm13_water_pending_by_region.clear()
 
