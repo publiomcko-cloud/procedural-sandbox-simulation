@@ -11,6 +11,7 @@ const LocalFrameIndex := preload("res://scripts/terrain/terrain_object_effect_lo
 const ProjectionBuildJob := preload("res://scripts/terrain/terrain_object_effect_projection_build_job.gd")
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
 const LookaheadPolicy := preload("res://scripts/terrain/terrain_stream_lookahead_policy.gd")
+const DM14DenseWindow := preload("res://scripts/terrain/dm14_effect_dense_window.gd")
 
 # Public v1 contracts bound horizontal reach:
 # translation <= 8 m, half extent <= 1.8 m, scale <= 5x, roughness <= 0.1 m.
@@ -57,6 +58,7 @@ var _prefetch_error := ""
 var _perf_trace_enabled := false
 # DM14 hotspot diagnostics, separate from the normal performance summary.
 var _dm14_effect_trace := false
+var _dm14_dense_enabled := false
 var _performance := {
 	"prepare_call_count": 0,
 	"prepare_total_usec": 0,
@@ -117,6 +119,7 @@ func initialize(
 	_dm14_effect_trace = _perf_trace_enabled and OS.get_environment(
 		"SANDBOX_DM14_EFFECT_TRACE"
 	) == "1"
+	_dm14_dense_enabled = OS.get_environment("SANDBOX_DM14_DENSE_REQUIRED") == "1"
 	if object_stream_value == null 		or not object_stream_value.has_method("get_authoritative_region_projection_source") 		or not object_stream_value.has_method("get_command_world_revision"):
 		initialization_error = "terrain_effect_runtime_object_stream_invalid"
 		return _failure(initialization_error)
@@ -1403,13 +1406,21 @@ func update_resident_target_regions(
 	)
 	dm14_normalize_usec = Time.get_ticks_usec() - dm14_stage_started
 	dm14_stage_started = Time.get_ticks_usec()
-	var required := _required_source_regions_for_regions(target_regions)
+	var required: Array[Vector2i] = []
+	var dm14_dense_used := false
+	if _dm14_dense_enabled and SOURCE_REGION_RADIUS == DM14DenseWindow.SOURCE_RADIUS:
+		var fast_window: Dictionary = DM14DenseWindow.ordered_required(target_regions)
+		if bool(fast_window.get("ok", false)):
+			required = fast_window["regions"]
+			dm14_dense_used = true
+	if not dm14_dense_used:
+		required = _required_source_regions_for_regions(target_regions)
 	dm14_required_usec = Time.get_ticks_usec() - dm14_stage_started
 	dm14_stage_started = Time.get_ticks_usec()
 	# Loading the nearest effect sources first avoids blocking the 3x3
 	# rendered terrain window behind distant sources in the 9x9 halo.
 	# Same required set and hard caps; only prefetch dispatch order changes.
-	if not target_regions.is_empty():
+	if not dm14_dense_used and not target_regions.is_empty():
 		var minimum := target_regions[0]
 		var maximum := target_regions[0]
 		for region in target_regions:
@@ -1444,7 +1455,6 @@ func update_resident_target_regions(
 	dm14_stage_started = Time.get_ticks_usec()
 	_filter_prefetch_to_protected()
 	dm14_filter_usec = Time.get_ticks_usec() - dm14_stage_started
-	_dm14_effect_trace = _dm14_effect_trace and _perf_trace_enabled
 	_prefetch_error = ""
 	_performance["window_update_count"] = int(_performance["window_update_count"]) + 1
 	_performance["window_target_region_count"] = target_regions.size()
@@ -1500,6 +1510,7 @@ func update_resident_target_regions(
 			"prefetch_enqueue_usec": dm14_enqueue_usec,
 			"target_count": target_regions.size(),
 			"required_count": required.size(),
+			"dm14_dense_used": dm14_dense_used,
 			"loaded_before": dm14_loaded_ids.size(),
 			"eviction_considered": dm14_evict_considered,
 			"evicted_now": evicted_now,
