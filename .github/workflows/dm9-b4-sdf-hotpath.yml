@@ -1,0 +1,187 @@
+name: DM9 SDF and Surface Nets hotpath qualification (EXPERIMENT)
+
+on:
+  push:
+    branches:
+      - exp/dm9-sdf-surface-nets-hotpath
+  workflow_dispatch:
+
+concurrency:
+  group: dm9-hotpath-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  parity-micro:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 25
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Godot import and parse of both lattice paths
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          & $env:GODOT_BIN --headless --editor --path .\game --import
+          if ($LASTEXITCODE -ne 0) { throw 'Godot import failed' }
+          foreach ($file in @(
+            'res://scripts/experiments/discrete_surface_nets_backend.gd',
+            'res://scripts/experiments/b4_region_visual_job.gd',
+            'res://scripts/terrain/terrain_demo.gd',
+            'res://tests/experiments/dm9_b4_hotpath_parity_benchmark.gd',
+            'res://tests/experiments/dm8_radial_world_distance_tests.gd'
+          )) {
+            & $env:GODOT_BIN --headless --path .\game --check-only --script $file
+            if ($LASTEXITCODE -ne 0) { throw "GDScript parse failed: $file" }
+          }
+      - name: Exact Q8.8 lattice and all 16 chunk mesh parity, with micro-stage timings
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        timeout-minutes: 15
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'dm9-hotpath-contract'
+          New-Item -Force -ItemType Directory -Path $dir | Out-Null
+          $log = Join-Path $dir 'dm9-b4-hotpath-parity.log'
+          $output = & $env:GODOT_BIN --headless --path .\game --script res://tests/experiments/dm9_b4_hotpath_parity_benchmark.gd 2>&1 | Out-String
+          $output | Set-Content -LiteralPath $log -Encoding UTF8
+          Write-Host $output
+          if ($LASTEXITCODE -ne 0 -or -not $output.Contains('DM9_B4_HOTPATH_PASS') -or $output.Contains('DM9_B4_HOTPATH_FAIL')) {
+            throw 'DM9 exact B4 parity or microbenchmark failed'
+          }
+          $result = @($output -split "`n" | Where-Object { $_.Contains('DM9_B4_HOTPATH_RESULT=') })
+          if ($result.Count -ne 1) { throw 'Missing exact parity summary' }
+          $summary = ($result[0].Substring($result[0].IndexOf('DM9_B4_HOTPATH_RESULT=') + 22) | ConvertFrom-Json)
+          if ($summary.failures -ne 0 -or $summary.cases -ne 4 -or -not $summary.lattice_and_mesh_exact) {
+            throw 'DM9 B4 parity contract invalid'
+          }
+          Write-Host 'DM9_B4_EXACT_PARITY_PASS'
+      - name: Upload micro-stage evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm9-b4-exact-parity
+          path: ${{ runner.temp }}\dm9-hotpath-contract\*.log
+          retention-days: 14
+          if-no-files-found: warn
+
+  visual-ab:
+    needs: parity-micro
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 100
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+      SANDBOX_TERRAIN_BACKEND: b4
+      SANDBOX_DM9_PREFETCH: '0'
+      SANDBOX_DM9_VISUAL_ADAPTIVE: '1'
+      SANDBOX_DM9_VISUAL_WORKERS: '4'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Deterministic idle and 18 m/s route A/B — unchanged environment and seed
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        timeout-minutes: 85
+        run: |
+          & $env:GODOT_BIN --headless --editor --path .\game --import
+          if ($LASTEXITCODE -ne 0) { throw 'DM9 import failed' }
+          $root = Join-Path $env:RUNNER_TEMP 'dm9-b4-visual-ab'
+          $summary = @()
+          foreach ($name in @('A-idle','B-idle','B-motion','A-motion')) {
+            $fast = $name.StartsWith('B')
+            $route = if ($name.EndsWith('idle')) { 'idle' } else { 'outback-18' }
+            $frames = if ($route -eq 'idle') { 3600 } else { 720 }
+            $env:SANDBOX_DM9_FAST_B4 = if ($fast) { '1' } else { '0' }
+            $dir = Join-Path $root $name
+            & .\scripts\perf\run-p5-deterministic-stream-benchmark.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $dir -Frames $frames -Routes @($route) -Profiles @('adaptive-skip-progressive') -CaptureProcessCpu
+            $m = Get-Content (Join-Path $dir "01-$route-adaptive-skip-progressive.metrics.json") -Raw | ConvertFrom-Json
+            if ($m.requested_frames -ne $frames -or $m.seed -ne 424242 -or [bool]$m.dm9_fast_b4 -ne $fast) {
+              throw "Mismatched test invariant: $name"
+            }
+            $summary += [ordered]@{
+              variant=$name; fast_b4=$fast;
+              frames=$frames; visual_high_regions=$m.dm9_visual_shell_complete_count;
+              visual_gap_final=$m.dm8_visual_gap_final_regions;
+              visual_worker_p50_ms=$m.dm9_visual_shell_worker_p50_ms;
+              visual_worker_p95_ms=$m.dm9_visual_shell_worker_p95_ms;
+              precompute_p50_ms=$m.dm9_visual_precompute_p50_ms;
+              lattice_p50_ms=$m.dm9_visual_lattice_p50_ms;
+              cell_rebuild_p50_ms=$m.dm9_visual_cell_rebuild_p50_ms;
+              chunk_build_p50_ms=$m.dm9_visual_chunk_build_p50_ms;
+              chunk_combine_p50_ms=$m.dm9_visual_chunk_combine_p50_ms;
+              uniform_cells_skipped=$m.dm9_uniform_cells_skipped_total;
+              frame_mean_ms=$m.avg_frame_ms;
+              frame_over20_pct=$m.frames_over_20_ms_pct;
+              frame_over33_pct=$m.frames_over_33_ms_pct;
+              cpu_avg_pct=$m.process_cpu_mean_pct_total_capacity;
+              cpu_peak_pct=$m.process_cpu_peak_pct_total_capacity;
+              rss_peak_mb=$m.process_rss_peak_mb;
+              canonical_focus_missing_pct=$m.f10_focus_missing_pct;
+              canonical_load_p95_ms=$m.region_load_p95_ms;
+            }
+          }
+          $summary | ConvertTo-Json -Depth 9 | Set-Content (Join-Path $root 'dm9-b4-visual-ab-summary.json') -Encoding UTF8
+          Write-Host ('DM9_B4_VISUAL_AB_RESULT=' + ($summary | ConvertTo-Json -Depth 9 -Compress))
+          Write-Host 'DM9_B4_VISUAL_AB_PASS'
+      - name: Retain raw trace and metrics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm9-b4-visual-ab
+          path: |
+            ${{ runner.temp }}\dm9-b4-visual-ab\**\*.log
+            ${{ runner.temp }}\dm9-b4-visual-ab\**\*.json
+          retention-days: 14
+          if-no-files-found: warn
+
+  gpu:
+    needs: visual-ab
+    runs-on: [self-hosted, Windows, X64, gpu-interactive]
+    timeout-minutes: 30
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+      SANDBOX_TERRAIN_BACKEND: b4
+      SANDBOX_DM9_PREFETCH: '0'
+      SANDBOX_DM9_VISUAL_ADAPTIVE: '1'
+      SANDBOX_DM9_VISUAL_WORKERS: '4'
+      SANDBOX_DM9_FAST_B4: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Qualified Windows GPU user session
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          & .\scripts\ci\p5-gpu-session-preflight.ps1 -Role Interactive
+          if ($LASTEXITCODE -ne 0) { throw 'GPU interactive preflight failed' }
+      - name: B4 fast pristine HIGH rendered smoke
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        timeout-minutes: 20
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'dm9-b4-fast-gpu'
+          & .\scripts\perf\run-p5-gpu-smoke.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $dir -Frames 360 -Routes @('straight-18') -StreamProfile 'adaptive-skip-progressive'
+          if ($LASTEXITCODE -ne 0) { throw 'B4 fast GPU smoke failed' }
+          $s = Get-Content (Join-Path $dir 'gpu-straight-18.stdout.log') -Raw
+          if (-not $s.Contains('DM9_FAST_B4: enabled=1') -or -not $s.Contains('"event":"dm4_region_b4_high_visible"')) {
+            throw 'B4 fast GPU evidence absent'
+          }
+          Write-Host 'DM9_B4_FAST_GPU_PASS'
+      - name: Retain screenshots and runtime trace
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm9-b4-fast-gpu
+          path: |
+            ${{ runner.temp }}\dm9-b4-fast-gpu\*.png
+            ${{ runner.temp }}\dm9-b4-fast-gpu\*.log
+            ${{ runner.temp }}\dm9-b4-fast-gpu\*.json
+          retention-days: 14
+          if-no-files-found: warn
