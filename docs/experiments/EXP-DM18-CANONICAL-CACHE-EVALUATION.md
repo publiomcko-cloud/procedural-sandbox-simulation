@@ -36,3 +36,22 @@ Métricas: foco canônico ausente, p99, >20/33ms, HIGH visuais, misses do foco a
 Até o recebimento dos resultados integrados, **não afirmar que o cache acelerou o carregamento**. Mesmo que revise uma malha sem recomputar, publicação, efeitos e objetos ainda precisam ser refeitos com revisão atual. Um ganho isolado de cache hit não prova redução de lacuna nem consumo seguro de memória.
 
 Após evidência headless, testar Windows GPU interativa real, colisões/brush em regiões revisitadas, edit/undo, mudança de world/seed, efeitos de objetos, hidrologia e persistência; medir RSS/VRAM e aumentar orçamento somente se houver benefício comprovado e uso seguro.
+
+## Resultado integrado do smoke (16 execuções, 2 pares por cenário)
+
+[GitHub Actions DM18 smoke](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43509145460), job smoke PASS. Valores são **médias de apenas dois pares**, não prova estatística para promoção.
+
+| Cenário | Core ausente sem cache | Core ausente com cache | Diferença | Cache hits por corrida | Jobs canônicos sem cache | Jobs com cache | Cache retido estimado |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 18 m/s outback-long (2400 frames) | 38,375% | 34,292% | **−4,084 p.p.** | **32,5** | 1457,5 | 996,0 | 25,29 MiB |
+| 18 m/s outback-short (720 frames) | 31,459% | 29,375% | −2,084 p.p. | 3,5 | 494,5 | 438,0 | 8,60 MiB |
+| 18 m/s straight-18 (720 frames) | 38,611% | 41,667% | +3,056 p.p. | **0** | 491,0 | 482,5 | 11,50 MiB |
+| Parado (3600 frames) | — | — | — | 0 | 144 | 144 | 0 MiB |
+
+Outback-long p99 18,056ms sem cache contra 17,362ms com cache; frames >33ms 0,0625% vs 0,1665% (**pequena regressão nessa amostra**). Visual HIGH completadas não foi o objetivo primário. Tempo de conclusão HIGH parado controle 13,052s, cache 13,572s (+0,52s, IC muito amplo).
+
+**Evidência do mecanismo:** em outback-long, restauração de uma região de cache levou em média **13,656ms desde o estágio até publicação**, enquanto regiões não cacheadas demoraram 1.227ms no braço controle (1.104ms no braço cache). Custo de cada chamada de publicação de cache: pico de 2,309ms, total ~47,826ms por corrida. Os **32,5 acertos por corrida** eliminaram ~461,5 jobs CPU canônicos, queda de 31,7%. Trabalho acumulado dos workers caiu de ~93,72s para ~62,75s e espera acumulada de ~32,24s para ~25,59s; são somas concorrentes, não tempo de parede. Frames sem foco canônico apesar de HIGH visual caíram de 744,5 para 688,5 no percurso longo.
+
+O efeito em movimento contínuo foi **zero cache hits**, portanto a otimização não resolve regiões novas. Não extrapolar os 25,29 MiB de bytes estimados como uso efetivo de RAM/VRAM: `ArrayMesh` é `Resource` com alocação gráfica.
+
+**Conclusão provisória:** cache correto e efetivamente usado, benefício plausível de cobertura em revisitas, ainda sem comprovação estatística de melhora do p99 ou de 5 p.p. de ausência canônica. O CI de replicação com 44 ensaios independentes está rodando nesse mesmo workflow; não registrar veredito de replicação antes da conclusão.
