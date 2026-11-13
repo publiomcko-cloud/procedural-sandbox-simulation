@@ -939,92 +939,103 @@ func _poll_resident_regions() -> void:
 			row["token"] = ""
 			_water_wait(id, row, "mesh_plan:" + String(plan.get("reason", "unknown")))
 			continue
-		var vertices: PackedVector3Array = plan["vertices"]
-		# Fully prepare the replacement before touching the visible mesh.
-		# The one main-thread pointer assignment has no blank frame.
-		var replacement: ArrayMesh
-		if not vertices.is_empty():
-			var arrays: Array = []
-			arrays.resize(Mesh.ARRAY_MAX)
-			arrays[Mesh.ARRAY_VERTEX] = vertices
-			arrays[Mesh.ARRAY_COLOR] = plan["colors"]
-			replacement = ArrayMesh.new()
-			replacement.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-			replacement.surface_set_material(0, _water_material)
-		var old_retained := bool(row.get("retained_visible", false))
-		var old_vertices := int(row.get("last_vertex_count", 0))
-		var wait_usec := 0
-		if int(row.get("wait_started_usec", 0)) > 0:
-			wait_usec = Time.get_ticks_usec() - int(row["wait_started_usec"])
-		node.mesh = replacement
-		node.visible = replacement != null
-		if bool(row.get("refresh_pending", false)):
-			_completed_visual_swaps_total += 1
-			if old_retained:
-				_peak_retained_usec = maxi(_peak_retained_usec, wait_usec)
-			if _trace_enabled:
-				PerformanceTrace.emit("p5_water_visual_swapped", {
-					"scope": id, "wait_usec": wait_usec,
-					"old_retained": old_retained,
-					"old_vertices": old_vertices,
-					"new_vertices": vertices.size(),
-					"old_token": String(row.get("retained_source_token", "")),
-					"new_token": token,
-				})
-		if node.visible and _trace_enabled and wait_usec > 0:
-			PerformanceTrace.emit("p5_water_visible", {
-				"scope": id, "wait_usec": wait_usec,
-				"triangles": int(vertices.size() / 3),
-			})
-		row["refresh_pending"] = false
-		row["retained_visible"] = false
-		row["retained_source_token"] = ""
-		row["wait_started_usec"] = 0
-		row["last_wait_report_usec"] = 0
-		row["token"] = token
-		# The signature must describe the water mesh just published. On the
-		# first ocean frame, row.last_ocean_sdf_tiles is still zero, so the
-		# pre-build signature incorrectly includes finite water hidden under
-		# the new sea plane, forcing an unnecessary follow-up rebuild.
-		row["water_signature"] = _water_visual_signature(
-			row["region_key"], environment, surface, _water_debug_mode,
-			hydrology_enabled, int(plan.get("ocean_sdf_tiles", 0))
-		)
-		row["ocean_neighbor_signature"] = neighbor_signature
-		row["ocean_boundary_edges"] = plan.get("ocean_boundary_edges", {})
-		row["last_ocean_neighbor_anchor_tiles"] = int(plan.get("ocean_neighbor_anchor_tiles", 0))
-		row["last_ocean_unadmitted_wet_tiles"] = int(plan.get("ocean_unadmitted_wet_tiles", 0))
-		row["last_ocean_unadmitted_boundary_tiles"] = int(plan.get("ocean_unadmitted_boundary_tiles", 0))
-		row["last_vertex_count"] = vertices.size()
-		row["last_halo_cells"] = int(plan.get("coastal_halo_cells", 0))
-		row["last_refined_coast_quads"] = int(plan.get("refined_coast_quads", 0))
-		row["last_ocean_sdf_tiles"] = int(plan.get("ocean_sdf_tiles", 0))
-		row["last_ocean_seam_edges"] = int(plan.get("ocean_seam_edges", 0))
-		_regions[id] = row
+		_dm13_commit_plan(id, row, node, environment, surface, token,
+			neighbor_signature, plan, started)
 		rebuilt += 1
-		_rebuilds_total += 1
-		var elapsed := Time.get_ticks_usec() - started
-		_peak_rebuild_usec = maxi(_peak_rebuild_usec, elapsed)
+
+## Original publication path shared by the synchronous baseline and
+## the revision-verified CPU worker. All Mesh/Node calls stay on main thread.
+func _dm13_commit_plan(
+	id: String, row: Dictionary, node: MeshInstance3D,
+	environment: Dictionary, surface: Dictionary, token: String,
+	neighbor_signature: PackedByteArray, plan: Dictionary, started: int
+) -> void:
+	var vertices: PackedVector3Array = plan["vertices"]
+	# Fully prepare the replacement before touching the visible mesh.
+	# The one main-thread pointer assignment has no blank frame.
+	var replacement: ArrayMesh
+	if not vertices.is_empty():
+		var arrays: Array = []
+		arrays.resize(Mesh.ARRAY_MAX)
+		arrays[Mesh.ARRAY_VERTEX] = vertices
+		arrays[Mesh.ARRAY_COLOR] = plan["colors"]
+		replacement = ArrayMesh.new()
+		replacement.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+		replacement.surface_set_material(0, _water_material)
+	var old_retained := bool(row.get("retained_visible", false))
+	var old_vertices := int(row.get("last_vertex_count", 0))
+	var wait_usec := 0
+	if int(row.get("wait_started_usec", 0)) > 0:
+		wait_usec = Time.get_ticks_usec() - int(row["wait_started_usec"])
+	node.mesh = replacement
+	node.visible = replacement != null
+	if bool(row.get("refresh_pending", false)):
+		_completed_visual_swaps_total += 1
+		if old_retained:
+			_peak_retained_usec = maxi(_peak_retained_usec, wait_usec)
 		if _trace_enabled:
-			PerformanceTrace.emit("p5_environment_visual_rebuild", {
-				"scope": id,
-				"duration_usec": elapsed,
-				"vertices": vertices.size(),
-				"triangles": int(vertices.size() / 3),
-				"water_cells": int(plan.get("water_cells", 0)),
-				"refined_coast_quads": int(plan.get("refined_coast_quads", 0)),
-				"coastal_halo_cells": int(plan.get("coastal_halo_cells", 0)),
-				"ocean_sdf_tiles": int(plan.get("ocean_sdf_tiles", 0)),
-				"ocean_seam_edges": int(plan.get("ocean_seam_edges", 0)),
-				"ocean_baseline_rejected_seeds": int(plan.get("ocean_baseline_rejected_seeds", 0)),
-				"ocean_neighbor_anchor_tiles": int(plan.get("ocean_neighbor_anchor_tiles", 0)),
-				"ocean_unadmitted_wet_tiles": int(plan.get("ocean_unadmitted_wet_tiles", 0)),
-				"ocean_unadmitted_boundary_tiles": int(plan.get("ocean_unadmitted_boundary_tiles", 0)),
-				"ocean_components_missing_source": int(plan.get("ocean_components_missing_source", 0)),
-				"ocean_components_missing_boundary": int(plan.get("ocean_components_missing_boundary", 0)),
-				"state_revision": int(environment["state_revision"]),
-				"terrain_revision": int(surface["terrain_revision"]),
+			PerformanceTrace.emit("p5_water_visual_swapped", {
+				"scope": id, "wait_usec": wait_usec,
+				"old_retained": old_retained,
+				"old_vertices": old_vertices,
+				"new_vertices": vertices.size(),
+				"old_token": String(row.get("retained_source_token", "")),
+				"new_token": token,
 			})
+	if node.visible and _trace_enabled and wait_usec > 0:
+		PerformanceTrace.emit("p5_water_visible", {
+			"scope": id, "wait_usec": wait_usec,
+			"triangles": int(vertices.size() / 3),
+		})
+	row["refresh_pending"] = false
+	row["retained_visible"] = false
+	row["retained_source_token"] = ""
+	row["wait_started_usec"] = 0
+	row["last_wait_report_usec"] = 0
+	row["token"] = token
+	# The signature must describe the water mesh just published. On the
+	# first ocean frame, row.last_ocean_sdf_tiles is still zero, so the
+	# pre-build signature incorrectly includes finite water hidden under
+	# the new sea plane, forcing an unnecessary follow-up rebuild.
+	row["water_signature"] = _water_visual_signature(
+		row["region_key"], environment, surface, _water_debug_mode,
+		hydrology_enabled, int(plan.get("ocean_sdf_tiles", 0))
+	)
+	row["ocean_neighbor_signature"] = neighbor_signature
+	row["ocean_boundary_edges"] = plan.get("ocean_boundary_edges", {})
+	row["last_ocean_neighbor_anchor_tiles"] = int(plan.get("ocean_neighbor_anchor_tiles", 0))
+	row["last_ocean_unadmitted_wet_tiles"] = int(plan.get("ocean_unadmitted_wet_tiles", 0))
+	row["last_ocean_unadmitted_boundary_tiles"] = int(plan.get("ocean_unadmitted_boundary_tiles", 0))
+	row["last_vertex_count"] = vertices.size()
+	row["last_halo_cells"] = int(plan.get("coastal_halo_cells", 0))
+	row["last_refined_coast_quads"] = int(plan.get("refined_coast_quads", 0))
+	row["last_ocean_sdf_tiles"] = int(plan.get("ocean_sdf_tiles", 0))
+	row["last_ocean_seam_edges"] = int(plan.get("ocean_seam_edges", 0))
+	_regions[id] = row
+	_rebuilds_total += 1
+	var elapsed := Time.get_ticks_usec() - started
+	_peak_rebuild_usec = maxi(_peak_rebuild_usec, elapsed)
+	if _trace_enabled:
+		PerformanceTrace.emit("p5_environment_visual_rebuild", {
+			"scope": id,
+			"duration_usec": elapsed,
+			"vertices": vertices.size(),
+			"triangles": int(vertices.size() / 3),
+			"water_cells": int(plan.get("water_cells", 0)),
+			"refined_coast_quads": int(plan.get("refined_coast_quads", 0)),
+			"coastal_halo_cells": int(plan.get("coastal_halo_cells", 0)),
+			"ocean_sdf_tiles": int(plan.get("ocean_sdf_tiles", 0)),
+			"ocean_seam_edges": int(plan.get("ocean_seam_edges", 0)),
+			"ocean_baseline_rejected_seeds": int(plan.get("ocean_baseline_rejected_seeds", 0)),
+			"ocean_neighbor_anchor_tiles": int(plan.get("ocean_neighbor_anchor_tiles", 0)),
+			"ocean_unadmitted_wet_tiles": int(plan.get("ocean_unadmitted_wet_tiles", 0)),
+			"ocean_unadmitted_boundary_tiles": int(plan.get("ocean_unadmitted_boundary_tiles", 0)),
+			"ocean_components_missing_source": int(plan.get("ocean_components_missing_source", 0)),
+			"ocean_components_missing_boundary": int(plan.get("ocean_components_missing_boundary", 0)),
+			"state_revision": int(environment["state_revision"]),
+			"terrain_revision": int(surface["terrain_revision"]),
+		})
+
 
 
 func _update_rain(delta: float, camera_position: Vector3, focus_region: Vector2i) -> void:
