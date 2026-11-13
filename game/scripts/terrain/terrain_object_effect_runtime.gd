@@ -910,6 +910,17 @@ func _rebase_cached_projection(
 	return rebased
 
 
+## DM14: bounded main-thread maintenance of tombstoned reverse routes.
+## The source authority is removed during update_resident_target_regions;
+## cleaning inactive route strings is not required before admitting new
+## authoritative projections, and cannot expose stale effect frames.
+func process_route_cleanup_step(
+	max_chunk_keys: int = 24, budget_usec: int = 1200
+) -> Dictionary:
+	if not initialized or projection == null:
+		return {"ok": false, "reason": "terrain_effect_runtime_not_initialized"}
+	return projection.process_route_cleanup_step(max_chunk_keys, budget_usec)
+
 func get_prefetch_pending_count() -> int:
 	return _prefetch_queue.size() \
 		+ _prefetch_generation_jobs.size() \
