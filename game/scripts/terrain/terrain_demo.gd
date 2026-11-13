@@ -2264,6 +2264,7 @@ func _process_free_exploration(delta: float) -> void:
 					"dm18_diagnostic_enabled": _dm18_diagnostic_enabled,
 					"dm19_cold_diagnostic_enabled": _dm19_cold_profile != null,
 					"dm19_cold": _dm19_cold_profile.summary() if _dm19_cold_profile != null else {},
+					"dm19_effect_runtime": terrain_effect_runtime.get_performance_snapshot() if _dm19_cold_profile != null and terrain_effect_runtime != null and bool(terrain_effect_runtime.get("initialized")) else {},
 					"dm18_cache": _dm18_cache.stats() if _dm18_cache_enabled else {},
 					"dm18": {
 						"focus_missing_total": _dm18_focus_missing_total,
