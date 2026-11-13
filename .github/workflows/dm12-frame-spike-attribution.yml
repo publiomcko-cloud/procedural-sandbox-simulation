@@ -1,0 +1,138 @@
+name: DM12 frame spike source attribution (experiment)
+
+on:
+  push:
+    branches:
+      - exp/dm12-frame-spike-attribution
+  workflow_dispatch:
+
+concurrency:
+  group: dm12-attribution-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  instrumentation:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 65
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+      SANDBOX_TERRAIN_BACKEND: b4
+      SANDBOX_DM9_FAST_B4: '1'
+      SANDBOX_DM9_VISUAL_WORKERS: '4'
+      SANDBOX_DM9_VISUAL_ADAPTIVE: '1'
+      SANDBOX_DM9_PREFETCH: '0'
+      SANDBOX_DM11_CANONICAL_FAST_B4: '1'
+      SANDBOX_DM11_VISUAL_LANE: '0'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Import and parse tracked runtime
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          & $env:GODOT_BIN --headless --editor --path .\game --import
+          if ($LASTEXITCODE -ne 0) { throw 'DM12 Godot import failed' }
+          & $env:GODOT_BIN --headless --path .\game --check-only --script res://scripts/terrain/terrain_demo.gd
+          if ($LASTEXITCODE -ne 0) { throw 'DM12 frame trace parse failed' }
+          Write-Host 'DM12_INSTRUMENTATION_PARSE_PASS'
+      - name: Reproducible no-trace vs tracing 18mps and cold idle
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        timeout-minutes: 55
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'dm12-frame-source'
+          $cases = @(
+            @{name='A-motion'; route='outback-18'; frames=720; trace='0'},
+            @{name='B-motion'; route='outback-18'; frames=720; trace='1'},
+            @{name='C-idle'; route='idle'; frames=2400; trace='1'},
+            @{name='B-motion2'; route='outback-18'; frames=720; trace='1'}
+          )
+          $summary = @()
+          foreach ($trial in $cases) {
+            $env:SANDBOX_DM12_FRAME_TRACE = $trial.trace
+            $dir = Join-Path $root $trial.name
+            & .\scripts\perf\run-p5-deterministic-stream-benchmark.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $dir -Frames $trial.frames -Routes @($trial.route) -Profiles @('adaptive-skip-progressive') -CaptureProcessCpu
+            $name = "01-$($trial.route)-adaptive-skip-progressive"
+            $m = Get-Content (Join-Path $dir "$name.metrics.json") -Raw | ConvertFrom-Json
+            if ($m.seed -ne 424242 -or $m.requested_frames -ne $trial.frames -or
+                -not [bool]$m.dm11_canonical_fast_b4_enabled -or [bool]$m.dm11_visual_lane_enabled) {
+              throw "DM12 source invariants violated: $($trial.name)"
+            }
+            $records = @()
+            if ($trial.trace -eq '1') {
+              $loglines = Get-Content (Join-Path $dir "$name.stdout.log")
+              foreach ($line in $loglines) {
+                $marker = '"event":"dm12_frame_attribution"'
+                if (-not $line.Contains($marker)) { continue }
+                $index = $line.IndexOf('PERF_TRACE ')
+                if ($index -lt 0) { continue }
+                $records += ($line.Substring($index + 11) | ConvertFrom-Json)
+              }
+              if ($records.Count -lt 1) { throw "DM12 instrumentation missing: $($trial.name)" }
+            }
+            $spikes = @($records | Where-Object { [double]$_.delta_previous_frame_ms -ge 33.0 })
+            $workspikes = @($records | Where-Object { [double]$_.current_process_usec -ge 14000.0 })
+            $priorHeavy = @($spikes | Where-Object { [double]$_.prior_process_usec -ge 14000.0 })
+            $priorCanon = @($spikes | Where-Object { [int]$_.prior_publication_counts.canonical_regions_committed -gt 0 })
+            $priorVisual = @($spikes | Where-Object { [int]$_.prior_publication_counts.visual_high_regions_published -gt 0 })
+            $priorCoarse = @($spikes | Where-Object { [int]$_.prior_publication_counts.coarse_previews_published -gt 0 })
+            $leaders = @{}
+            $exampleFrames = @()
+            foreach ($record in $spikes) {
+              $stages = @($record.prior_stages_usec.PSObject.Properties | Where-Object {
+                  -not $_.Name.StartsWith('mesh_') -or $_.Name -eq 'mesh_dispatch_and_upload'
+                } | Sort-Object { [long]$_.Value } -Descending)
+              if ($stages.Count -gt 0) {
+                $leader = [string]$stages[0].Name
+                if (-not $leaders.ContainsKey($leader)) { $leaders[$leader] = 0 }
+                $leaders[$leader]++
+              }
+              $exampleFrames += [ordered]@{
+                previous_frame_delta_ms = [Math]::Round([double]$record.delta_previous_frame_ms, 2);
+                prior_process_ms = [Math]::Round([double]$record.prior_process_usec / 1000.0, 2);
+                current_process_ms = [Math]::Round([double]$record.current_process_usec / 1000.0, 2);
+                prior_heaviest_stage = $(if ($stages.Count -gt 0) { $stages[0].Name } else { '' });
+                prior_heaviest_stage_ms = $(if ($stages.Count -gt 0) { [Math]::Round([double]$stages[0].Value/1000.0, 2) } else { 0 });
+                prior_commits = $record.prior_publication_counts.canonical_regions_committed;
+                prior_visual = $record.prior_publication_counts.visual_high_regions_published;
+                prior_coarse = $record.prior_publication_counts.coarse_previews_published;
+              }
+            }
+            $worst = @($exampleFrames | Sort-Object { [double]$_.previous_frame_delta_ms } -Descending | Select-Object -First 8)
+            $summary += [ordered]@{
+              trial = $trial.name; route = $trial.route; traced = $trial.trace;
+              frame_mean_ms = $m.avg_frame_ms;
+              frames_over_33_pct = $m.frames_over_33_ms_pct;
+              frames_over_20_pct = $m.frames_over_20_ms_pct;
+              canonical_focus_missing_pct = $m.f10_focus_missing_pct;
+              canonical_region_p95_ms = $m.region_load_p95_ms;
+              visual_high_completed = $m.dm9_visual_shell_complete_count;
+              sampled_attribution_events = $records.Count;
+              delta_33ms_spikes_with_attribution = $spikes.Count;
+              process_14ms_spikes = $workspikes.Count;
+              delta_spikes_after_heavy_process = $priorHeavy.Count;
+              delta_spikes_after_canonical_commit = $priorCanon.Count;
+              delta_spikes_after_visual_high = $priorVisual.Count;
+              delta_spikes_after_coarse = $priorCoarse.Count;
+              prior_dominant_stage_frequency = $leaders;
+              worst_frames = $worst;
+              cpu_pct = $m.process_cpu_mean_pct_total_capacity;
+            }
+            Write-Host ('DM12_SPIKE_CASE=' + ($summary[-1] | ConvertTo-Json -Compress -Depth 9))
+          }
+          $summary | ConvertTo-Json -Depth 10 | Set-Content (Join-Path $root 'dm12-frame-source-summary.json') -Encoding UTF8
+          Write-Host 'DM12_FRAME_ATTRIBUTION_PASS'
+      - name: Upload raw traces, spike correlation and benchmark metrics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm12-frame-source
+          path: |
+            ${{ runner.temp }}\dm12-frame-source\**\*.log
+            ${{ runner.temp }}\dm12-frame-source\**\*.json
+          retention-days: 14
+          if-no-files-found: warn
