@@ -288,6 +288,10 @@ var _stream_bench_warmup_frames := 0
 var _stream_bench_frames_done := 0
 var _stream_bench_started_usec := 0
 var _stream_bench_distance_m := 0.0
+# DM17: opt-in wall-clock motion; never used by ordinary gameplay or DM16 baseline.
+var _dm17_wallclock_route := false
+var _dm17_previous_motion_usec := 0
+var _dm17_motion_elapsed_sec := 0.0
 var _stream_bench_reported := false
 var _lookahead_stage_targets: Array[Vector2i] = []
 var _lookahead_stage_signature := ""
@@ -510,6 +514,7 @@ func _ready() -> void:
 		})
 	# Deterministic benchmark mode is inert without the dedicated CI opt-in.
 	if OS.get_environment("SANDBOX_STREAM_BENCHMARK") == "1":
+		_dm17_wallclock_route = OS.get_environment("SANDBOX_DM17_WALLCLOCK_ROUTE") == "1"
 		for argument in stream_profile_args:
 			if argument.begins_with("--stream-benchmark-route="):
 				_stream_bench_route = argument.trim_prefix("--stream-benchmark-route=").strip_edges().to_lower()
@@ -2202,6 +2207,8 @@ func _process_free_exploration(delta: float) -> void:
 					"frames": _stream_bench_frames_done,
 					"warmup_frames": _stream_bench_warmup_frames,
 					"distance_m": snappedf(_stream_bench_distance_m, 0.001),
+					"wallclock_route": _dm17_wallclock_route,
+					"wallclock_motion_seconds": snappedf(_dm17_motion_elapsed_sec, 0.000001),
 					"final_x_mm": roundi(camera.global_position.x * 1000.0),
 					"final_z_mm": roundi(camera.global_position.z * 1000.0),
 					"elapsed_wall_ms": (Time.get_ticks_usec() - _stream_bench_started_usec) / 1000.0,
@@ -2210,11 +2217,20 @@ func _process_free_exploration(delta: float) -> void:
 				get_tree().quit(0)
 			return
 		var local_input := Vector3.ZERO
+		var motion_step_sec := STREAM_BENCH_STEP_SEC
+		if _dm17_wallclock_route:
+			var now_usec := Time.get_ticks_usec()
+			# The first measured frame starts the wall clock without inventing a 1/60s step.
+			motion_step_sec = maxf(0.0, float(now_usec - _dm17_previous_motion_usec) / 1000000.0) \
+				if _dm17_previous_motion_usec > 0 else 0.0
+			_dm17_previous_motion_usec = now_usec
+			_dm17_motion_elapsed_sec += motion_step_sec
 		if _stream_bench_route != "idle":
 			local_input.x = -1.0 if _stream_bench_route.begins_with("outback") \
-				and _stream_bench_frames_done >= _stream_bench_frames_goal / 2 else 1.0
-			_stream_bench_distance_m += (54.0 if _stream_bench_route.ends_with("54") else 18.0) * STREAM_BENCH_STEP_SEC
-		_apply_free_explore_motion(local_input, STREAM_BENCH_STEP_SEC, _stream_bench_route.ends_with("54"))
+				and (_dm17_motion_elapsed_sec >= float(_stream_bench_frames_goal) * STREAM_BENCH_STEP_SEC * 0.5 \
+				if _dm17_wallclock_route else _stream_bench_frames_done >= _stream_bench_frames_goal / 2) else 1.0
+			_stream_bench_distance_m += (54.0 if _stream_bench_route.ends_with("54") else 18.0) * motion_step_sec
+		_apply_free_explore_motion(local_input, motion_step_sec, _stream_bench_route.ends_with("54"))
 		_stream_bench_frames_done += 1
 		return
 	var local_input := Vector3.ZERO
