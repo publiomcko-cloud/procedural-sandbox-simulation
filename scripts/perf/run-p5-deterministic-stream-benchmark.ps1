@@ -174,6 +174,12 @@ foreach ($route in $Routes) {
         $dm9VisualQueueMs = @()
         $dm9VisualFieldMs = @()
         $dm9VisualMeshMs = @()
+        $dm9VisualPrecomputeMs = @()
+        $dm9VisualLatticeMs = @()
+        $dm9VisualRebuildMs = @()
+        $dm9VisualChunkBuildMs = @()
+        $dm9VisualChunkCombineMs = @()
+        $dm9UniformCells = @()
         $dm9VisualPublishMs = @()
         foreach ($line in $lines) {
             $start = $line.IndexOf('PERF_TRACE ')
@@ -187,6 +193,12 @@ foreach ($route in $Routes) {
                     $dm9VisualQueueMs += ([double]$event.worker_queue_usec / 1000.0)
                     $dm9VisualFieldMs += ([double]$event.field_generate_usec / 1000.0)
                     $dm9VisualMeshMs += ([double]$event.surface_mesh_usec / 1000.0)
+                    $dm9VisualPrecomputeMs += ([double]$event.precompute_usec / 1000.0)
+                    $dm9VisualLatticeMs += ([double]$event.lattice_usec / 1000.0)
+                    $dm9VisualRebuildMs += ([double]$event.cell_rebuild_usec / 1000.0)
+                    $dm9VisualChunkBuildMs += ([double]$event.chunk_build_usec / 1000.0)
+                    $dm9VisualChunkCombineMs += ([double]$event.chunk_combine_usec / 1000.0)
+                    $dm9UniformCells += [int]$event.uniform_cells_skipped
                     $dm9VisualPublishMs += ([double]$event.main_thread_publish_usec / 1000.0)
                 }
                 'dm9_prefetch_stage' {
@@ -294,6 +306,18 @@ foreach ($route in $Routes) {
             dm9_lifecycle = $dm9ByAction
             dm9_visual_worker_limit = $(if ($env:SANDBOX_DM9_VISUAL_WORKERS) { [int]$env:SANDBOX_DM9_VISUAL_WORKERS } else { 1 })
             dm9_visual_shell_complete_count = $dm9VisualWorkerMs.Count
+            dm9_fast_b4 = ($env:SANDBOX_DM9_FAST_B4 -eq '1')
+            dm9_visual_precompute_p50_ms = Get-Percentile $dm9VisualPrecomputeMs 0.50
+            dm9_visual_precompute_p95_ms = Get-Percentile $dm9VisualPrecomputeMs 0.95
+            dm9_visual_lattice_p50_ms = Get-Percentile $dm9VisualLatticeMs 0.50
+            dm9_visual_lattice_p95_ms = Get-Percentile $dm9VisualLatticeMs 0.95
+            dm9_visual_cell_rebuild_p50_ms = Get-Percentile $dm9VisualRebuildMs 0.50
+            dm9_visual_cell_rebuild_p95_ms = Get-Percentile $dm9VisualRebuildMs 0.95
+            dm9_visual_chunk_build_p50_ms = Get-Percentile $dm9VisualChunkBuildMs 0.50
+            dm9_visual_chunk_build_p95_ms = Get-Percentile $dm9VisualChunkBuildMs 0.95
+            dm9_visual_chunk_combine_p50_ms = Get-Percentile $dm9VisualChunkCombineMs 0.50
+            dm9_visual_chunk_combine_p95_ms = Get-Percentile $dm9VisualChunkCombineMs 0.95
+            dm9_uniform_cells_skipped_total = [long]$(if ($dm9UniformCells.Count -gt 0) { ($dm9UniformCells | Measure-Object -Sum).Sum } else { 0 })
             dm9_visual_shell_worker_p50_ms = Get-Percentile $dm9VisualWorkerMs 0.50
             dm9_visual_shell_worker_p95_ms = Get-Percentile $dm9VisualWorkerMs 0.95
             dm9_visual_field_generate_p50_ms = Get-Percentile $dm9VisualFieldMs 0.50
