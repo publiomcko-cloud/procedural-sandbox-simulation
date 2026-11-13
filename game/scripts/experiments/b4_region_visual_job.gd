@@ -50,7 +50,8 @@ static func build_data(world_seed: int, key: Vector2i, _level: int = 0, fast: bo
 	var chunk_combine_usec := 0
 	for coordinate in Grid.all_coordinates():
 		var chunk_started := Time.get_ticks_usec()
-		var part: Dictionary = mesher.build_chunk(coordinate)
+		var part: Dictionary = mesher.build_chunk_pristine_fast(coordinate) if fast \
+			else mesher.build_chunk(coordinate)
 		chunk_build_usec += Time.get_ticks_usec() - chunk_started
 		if not bool(part.get("valid", false)):
 			return {
