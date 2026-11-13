@@ -55,6 +55,8 @@ var _projection_source_cache: Dictionary = {}
 var _projection_source_cache_order: Array[String] = []
 var _prefetch_error := ""
 var _perf_trace_enabled := false
+# DM14 hotspot diagnostics, separate from the normal performance summary.
+var _dm14_effect_trace := false
 var _performance := {
 	"prepare_call_count": 0,
 	"prepare_total_usec": 0,
@@ -112,6 +114,9 @@ func initialize(
 	initialized = false
 	initialization_error = ""
 	_perf_trace_enabled = PerformanceTrace.is_enabled()
+	_dm14_effect_trace = _perf_trace_enabled and OS.get_environment(
+		"SANDBOX_DM14_EFFECT_TRACE"
+	) == "1"
 	if object_stream_value == null 		or not object_stream_value.has_method("get_authoritative_region_projection_source") 		or not object_stream_value.has_method("get_command_world_revision"):
 		initialization_error = "terrain_effect_runtime_object_stream_invalid"
 		return _failure(initialization_error)
@@ -1367,9 +1372,22 @@ func _target_from_chunk_id(chunk_id: String) -> Dictionary:
 func update_resident_target_regions(
 	target_regions_value: Array
 ) -> Dictionary:
+
 	var window_started_usec := Time.get_ticks_usec()
 	if not initialized:
 		return _failure("terrain_effect_runtime_not_initialized")
+	var dm14_stage_started := Time.get_ticks_usec()
+	var dm14_normalize_usec := 0
+	var dm14_required_usec := 0
+	var dm14_prioritize_usec := 0
+	var dm14_protected_usec := 0
+	var dm14_filter_usec := 0
+	var dm14_get_loaded_usec := 0
+	var dm14_scope_parse_usec := 0
+	var dm14_release_usec := 0
+	var dm14_enqueue_usec := 0
+	var dm14_evict_considered := 0
+	var dm14_release_max_usec := 0
 	var target_regions: Array[Vector2i] = []
 	var seen: Dictionary = {}
 	for value in target_regions_value:
@@ -1383,7 +1401,11 @@ func update_resident_target_regions(
 	target_regions.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
 		return a.y < b.y or (a.y == b.y and a.x < b.x)
 	)
+	dm14_normalize_usec = Time.get_ticks_usec() - dm14_stage_started
+	dm14_stage_started = Time.get_ticks_usec()
 	var required := _required_source_regions_for_regions(target_regions)
+	dm14_required_usec = Time.get_ticks_usec() - dm14_stage_started
+	dm14_stage_started = Time.get_ticks_usec()
 	# Loading the nearest effect sources first avoids blocking the 3x3
 	# rendered terrain window behind distant sources in the 9x9 halo.
 	# Same required set and hard caps; only prefetch dispatch order changes.
@@ -1410,13 +1432,19 @@ func update_resident_target_regions(
 				return ma < mb
 			return a.y < b.y or (a.y == b.y and a.x < b.x)
 		)
+	dm14_prioritize_usec = Time.get_ticks_usec() - dm14_stage_started
+	dm14_stage_started = Time.get_ticks_usec()
 	if required.size() > ProjectionService.MAX_RESIDENT_SCOPES:
 		return _failure("terrain_effect_runtime_window_scope_budget_exceeded")
 	var next_protected: Dictionary = {}
 	for region in required:
 		next_protected[Contract.scope_id_for_region(region)] = true
 	_protected_scope_ids = next_protected
+	dm14_protected_usec = Time.get_ticks_usec() - dm14_stage_started
+	dm14_stage_started = Time.get_ticks_usec()
 	_filter_prefetch_to_protected()
+	dm14_filter_usec = Time.get_ticks_usec() - dm14_stage_started
+	_dm14_effect_trace = _dm14_effect_trace and _perf_trace_enabled
 	_prefetch_error = ""
 	_performance["window_update_count"] = int(_performance["window_update_count"]) + 1
 	_performance["window_target_region_count"] = target_regions.size()
@@ -1425,14 +1453,25 @@ func update_resident_target_regions(
 	# Release scopes that cannot contribute to the current requested terrain
 	# window. No source generation/reconciliation is performed here.
 	var evicted_now := 0
-	for scope_id in projection.get_loaded_scope_ids():
+	dm14_stage_started = Time.get_ticks_usec()
+	var dm14_loaded_ids: Array[String] = projection.get_loaded_scope_ids()
+	dm14_get_loaded_usec = Time.get_ticks_usec() - dm14_stage_started
+	for scope_id in dm14_loaded_ids:
 		if _protected_scope_ids.has(scope_id):
 			continue
 		if _invalidated_scope_ids.has(scope_id):
 			continue
+
+		dm14_evict_considered += 1
+		dm14_stage_started = Time.get_ticks_usec()
 		var parsed := _region_from_scope_id(scope_id)
+		dm14_scope_parse_usec += Time.get_ticks_usec() - dm14_stage_started
 		if parsed.get("ok", false):
+			dm14_stage_started = Time.get_ticks_usec()
 			projection.release_scope(parsed["region_key"], true)
+			var dm14_one_release_usec := Time.get_ticks_usec() - dm14_stage_started
+			dm14_release_usec += dm14_one_release_usec
+			dm14_release_max_usec = maxi(dm14_release_max_usec, dm14_one_release_usec)
 			_performance["scope_eviction_count"] = int(
 				_performance["scope_eviction_count"]
 			) + 1
@@ -1440,9 +1479,33 @@ func update_resident_target_regions(
 				_performance["window_eviction_count"]
 			) + 1
 			evicted_now += 1
+
+	dm14_stage_started = Time.get_ticks_usec()
 	if incremental_prefetch_enabled:
 		_enqueue_prefetch_regions(required, false)
+	dm14_enqueue_usec = Time.get_ticks_usec() - dm14_stage_started
 	var window_duration_usec := Time.get_ticks_usec() - window_started_usec
+	if _dm14_effect_trace:
+		PerformanceTrace.emit("dm14_effect_window_stages", {
+			"window_duration_usec": window_duration_usec,
+			"normalize_usec": dm14_normalize_usec,
+			"required_usec": dm14_required_usec,
+			"priority_sort_usec": dm14_prioritize_usec,
+			"protected_set_usec": dm14_protected_usec,
+			"prefetch_filter_usec": dm14_filter_usec,
+			"loaded_enumeration_usec": dm14_get_loaded_usec,
+			"eviction_parse_usec": dm14_scope_parse_usec,
+			"eviction_release_usec": dm14_release_usec,
+			"eviction_release_max_usec": dm14_release_max_usec,
+			"prefetch_enqueue_usec": dm14_enqueue_usec,
+			"target_count": target_regions.size(),
+			"required_count": required.size(),
+			"loaded_before": dm14_loaded_ids.size(),
+			"eviction_considered": dm14_evict_considered,
+			"evicted_now": evicted_now,
+			"prefetch_pending": get_prefetch_pending_count(),
+			"scope_count": projection.get_loaded_scope_count(),
+		})
 	if _perf_trace_enabled:
 		PerformanceTrace.emit("effect_window_update", {
 			"duration_usec": window_duration_usec,
