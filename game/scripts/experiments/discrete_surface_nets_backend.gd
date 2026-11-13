@@ -226,19 +226,22 @@ func generate_chunk(
 	last_canonical_fast_sdf = false
 	last_pristine_uniform_cells = 0
 	var sample_started := Time.get_ticks_usec()
-	# Only cache the pristine base field when all overlay sources are provably
-	# absent. Edited/materialized/effect/cave snapshots use the exact original
-	# evaluator; no speculative replacement of authoritative semantics.
+	# Prepare immutable arrays and the XZ base SDF once per chunk. The
+	# final per-node composition remains identical to the original snapshot
+	# evaluator, including materialized override, brushes, effects and cave.
 	var centers: PackedVector3Array = snapshot.get("centers", PackedVector3Array())
 	var radii: PackedFloat64Array = snapshot.get("radii", PackedFloat64Array())
 	var modes: PackedByteArray = snapshot.get("modes", PackedByteArray())
 	var materialized: Variant = snapshot.get("materialized_tiles", [])
 	var effects: Variant = snapshot.get("terrain_object_effect_frames", [])
-	var pristine := canonical_fast and not cave_section_enabled \
+	var materialized_index: Variant = snapshot.get("materialized_tile_index", {})
+	var prepared := canonical_fast and materialized is Array and effects is Array \
+		and centers.size() == radii.size() and centers.size() == modes.size()
+	var pristine := prepared and not cave_section_enabled \
 		and centers.is_empty() and radii.is_empty() and modes.is_empty() \
 		and materialized is Array and (materialized as Array).is_empty() \
 		and effects is Array and (effects as Array).is_empty()
-	if pristine:
+	if prepared:
 		last_canonical_fast_sdf = true
 		# Preserve exact SdfWorld expression ordering and Q8.8 roundi.
 		var x_count := node_dims.x
@@ -278,6 +281,14 @@ func generate_chunk(
 						local_y - cave_y_terms[i], cave_dz_terms[i]
 					).length() - 0.92
 					var density: float = minf(bounded_surface, cave_distance)
+					if not pristine:
+						density = BrushState.sample_density_snapshot_from_base(
+							density, region_key, _point(x, y, z),
+							cave_section_enabled, centers, radii, modes,
+							materialized, materialized_index, effects
+						)
+						if not is_finite(density):
+							return false
 					nodes[row + x + 1] = roundi(density * SCALE)
 					last_generation_sample_count += 1
 	else:
