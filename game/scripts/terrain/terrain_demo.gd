@@ -279,6 +279,9 @@ var _dm18_job_times: Dictionary = {
 }
 # DM19: profiling only, allocated exclusively for benchmark when explicitly enabled.
 var _dm19_cold_profile: RefCounted
+var _dm19_effect_motion_priority := false
+var _dm19_effect_motion_calls := 0
+var _dm19_effect_motion_reordered := 0
 
 var _dm12_surface_slice := false
 var _dm14_lazy_route_enabled := false
@@ -434,6 +437,7 @@ var _last_edit_rejection := ""
 
 func _ready() -> void:
 	_perf_trace_enabled = PerformanceTrace.is_enabled()
+	_dm19_effect_motion_priority = OS.get_environment("SANDBOX_DM19_EFFECT_MOTION_PRIORITY") == "1"
 	if OS.get_environment("SANDBOX_DM19_COLD_DIAGNOSTIC") == "1" \
 	and OS.get_environment("SANDBOX_STREAM_BENCHMARK") == "1":
 		_dm19_cold_profile = DM19ColdAttribution.new()
@@ -1436,6 +1440,23 @@ func _process(delta: float) -> void:
 		terrain_effect_runtime.prioritize_prefetch_for_motion(
 			focus_region_key, mapped_ahead["region_key"]
 		)
+	elif _dm19_effect_motion_priority and free_explore_enabled \
+	and _last_f10_speed_mps > 1.0 \
+	and terrain_effect_runtime != null \
+	and bool(terrain_effect_runtime.get("initialized")):
+		# DM19-B changes only ordering of already-protected effect sources.
+		# It does NOT enable predictive canonical loads or expand any windows.
+		var motion_velocity := f10_motion / maxf(delta, 0.000001)
+		var lead_position := camera.global_position \
+			+ motion_velocity * StreamLookaheadPolicy.LOOKAHEAD_SECONDS
+		var lead_mapped: Dictionary = SpatialGrid.world_to_region_local(lead_position)
+		if bool(lead_mapped.get("valid", false)):
+			var prioritized: Dictionary = terrain_effect_runtime.prioritize_prefetch_for_motion(
+				focus_region_key, lead_mapped["region_key"]
+			)
+			_dm19_effect_motion_calls += 1
+			if bool(prioritized.get("changed", false)):
+				_dm19_effect_motion_reordered += 1
 	_stream_stage_measure("focus_window_lookahead", stream_preflight_started_usec)
 	if _dm19_cold_profile != null:
 		_dm19_cold_profile.frame_phase("focus_window_lookahead", Time.get_ticks_usec() - stream_preflight_started_usec)
@@ -2275,6 +2296,9 @@ func _process_free_exploration(delta: float) -> void:
 					"dm18_cache_enabled": _dm18_cache_enabled,
 					"dm18_diagnostic_enabled": _dm18_diagnostic_enabled,
 					"dm19_cold_diagnostic_enabled": _dm19_cold_profile != null,
+					"dm19_effect_motion_priority": _dm19_effect_motion_priority,
+					"dm19_effect_motion_calls": _dm19_effect_motion_calls,
+					"dm19_effect_motion_reordered": _dm19_effect_motion_reordered,
 					"dm19_cold": _dm19_cold_profile.summary() if _dm19_cold_profile != null else {},
 					"dm19_effect_runtime": terrain_effect_runtime.get_performance_snapshot() if _dm19_cold_profile != null and terrain_effect_runtime != null and bool(terrain_effect_runtime.get("initialized")) else {},
 					"dm18_cache": _dm18_cache.stats() if _dm18_cache_enabled else {},
