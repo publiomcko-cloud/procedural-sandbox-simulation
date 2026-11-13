@@ -23,6 +23,7 @@ const MaterialEnvironmentDomainScript := preload("res://scripts/simulation/mater
 const EnvironmentClimateDomainScript := preload("res://scripts/simulation/environment_climate_domain.gd")
 const EnvironmentHydrologyDomainScript := preload("res://scripts/simulation/environment_hydrology_domain.gd")
 const EnvironmentSurfaceCacheJobScript := preload("res://scripts/simulation/environment_surface_cache_job.gd")
+const DM16BenchmarkProbe := preload("res://scripts/diagnostics/dm16_benchmark_probe.gd")
 const DM12SnapshotBatch := preload("res://scripts/terrain/dm12_surface_snapshot_batch.gd")
 const EnvironmentVisualScript := preload("res://scripts/simulation/environment_visual_presentation.gd")
 const EnvironmentStartupLocation := preload("res://scripts/simulation/environment_startup_location.gd")
@@ -252,6 +253,10 @@ var _stream_window_stage_usec: Dictionary = {}
 # DM12 opt-in main-thread frame attribution. Per-frame timings are never
 # computed/printed during ordinary gameplay unless explicitly enabled.
 var _dm12_trace_enabled := false
+# DM16: isolated benchmark-only in-memory receipts work even when
+# SANDBOX_PERF_TRACE=0. Neither mode prints inside the _process loop.
+var _dm16_probe: RefCounted
+var _dm16_light_stage := false
 var _dm12_surface_slice := false
 var _dm14_lazy_route_enabled := false
 var _dm12_surface_prepare: Dictionary = {}
@@ -402,6 +407,11 @@ var _last_edit_rejection := ""
 
 func _ready() -> void:
 	_perf_trace_enabled = PerformanceTrace.is_enabled()
+	if OS.get_environment("SANDBOX_STREAM_BENCHMARK") == "1" \
+	and OS.get_environment("SANDBOX_DM16_BENCH_METRICS") == "1":
+		_dm16_probe = DM16BenchmarkProbe.new()
+		_dm16_light_stage = not _perf_trace_enabled and \
+			OS.get_environment("SANDBOX_DM16_LIGHT_STAGES") == "1"
 	var requested_mesh_backend := OS.get_environment("SANDBOX_TERRAIN_BACKEND").strip_edges().to_lower()
 	if requested_mesh_backend == "b4":
 		_experimental_mesh_backend = "b4"
@@ -1095,12 +1105,15 @@ func _stream_dispatch_blocked(reason: String) -> void:
 
 
 func _stream_stage_measure(stage: String, started_usec: int) -> void:
-	if not _perf_trace_enabled:
+	if not _perf_trace_enabled and not _dm16_light_stage:
 		return
 	var elapsed := maxi(0, Time.get_ticks_usec() - started_usec)
-	_stream_window_stage_usec[stage] = int(_stream_window_stage_usec.get(stage, 0)) + elapsed
-	if _dm12_trace_enabled:
-		_dm12_frame_stage_usec[stage] = int(_dm12_frame_stage_usec.get(stage, 0)) + elapsed
+	if _perf_trace_enabled:
+		_stream_window_stage_usec[stage] = int(_stream_window_stage_usec.get(stage, 0)) + elapsed
+		if _dm12_trace_enabled:
+			_dm12_frame_stage_usec[stage] = int(_dm12_frame_stage_usec.get(stage, 0)) + elapsed
+	if _dm16_light_stage and _dm16_probe != null:
+		_dm16_probe.record_stage(stage, elapsed)
 
 
 
@@ -1481,6 +1494,16 @@ func _process(delta: float) -> void:
 		_update_status()
 		_dm12_stage("diagnostics", dm12_diagnostics_started_usec)
 	_dm12_emit_frame_if_spike(process_started_usec)
+	if _dm16_probe != null and _stream_bench_frames_done >= 1 \
+	and _stream_bench_frames_done <= _stream_bench_frames_goal \
+	and _stream_bench_warmup_remaining == 0 \
+	and not _stream_bench_reported:
+		_dm16_probe.record_frame(
+			_last_frame_ms, Time.get_ticks_usec() - process_started_usec,
+			not active_regions.has(_region_id(focus_region_key)) if _stream_bench_route != "idle" else false,
+			_dm8_high_receipt_signature != "",
+			float(Time.get_ticks_usec() - _stream_bench_started_usec) / 1000.0
+		)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -2162,6 +2185,16 @@ func _process_free_exploration(delta: float) -> void:
 						"height": image.get_height(),
 						"path": capture_path,
 					}))
+				if _dm16_probe != null:
+					print("DM16_BENCH_SUMMARY: " + JSON.stringify(
+						_dm16_probe.summary(
+							_stream_bench_route, _stream_profile, world_seed,
+							_stream_bench_frames_goal, _perf_trace_enabled,
+							_dm16_light_stage, _dm9_shell_completed_total,
+							_dm3_shell_nodes.size(), active_regions.size(),
+							int(object_stream.get_command_world_revision())
+						)
+					))
 				print("P5_STREAM_BENCH_COMPLETE: " + JSON.stringify({
 					"route": _stream_bench_route,
 					"profile": _stream_profile,
