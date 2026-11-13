@@ -95,7 +95,7 @@ func lookup(region_id: String, expected_identity: Dictionary) -> Dictionary:
 		erase(region_id)
 		return {}
 	for mesh_value in (record["meshes"] as Dictionary).values():
-		if not is_instance_valid(mesh_value) or (mesh_value as Mesh).get_surface_count() < 1:
+		if not is_instance_valid(mesh_value) or not mesh_value is Mesh:
 			rejected += 1
 			erase(region_id)
 			return {}
