@@ -2734,8 +2734,10 @@ func _dm18_capture_completed_region(id: String, entry: Dictionary) -> void:
 	if not _dm18_cache_enabled or global_rebuild_pending or not _edit_transaction.is_empty():
 		return
 	var state: RefCounted = entry.get("world_state")
-	var identity_token := _dm18_identity_for_state(state)
-	if identity_token.is_empty():
+	var identity_token: Dictionary = entry.get("dm18_identity_at_publish", {})
+	if loading_regions.has(id) or identity_token.is_empty() \
+		or not DM18CanonicalCache.same_identity(identity_token, _dm18_identity_for_state(state)):
+		return
 		return
 	var meshes := {}
 	var lods := {}
@@ -4417,6 +4419,10 @@ func _publish_partial_stage(id: String, stage: Dictionary) -> bool:
 			int(stage.get("triangle_count_by_coordinate", {}).get(coordinate, -1))
 		)
 		_set_chunk_lod_state(chunk_id, node, int(stage.get("actual_lod_by_coordinate", {}).get(coordinate, 0)), bool(stage.get("fallback_by_coordinate", {}).get(coordinate, false)))
+	# Partial replacement may mix prior and new revision states by design.
+	# Never claim this as a fully reusable 16-chunk cache snapshot.
+	entry["dm18_identity_at_publish"] = {}
+	active_regions[id] = entry
 	_record_completed_operation(stage)
 	_lod_selection_dirty = true
 	if stage["region_key"] == focus_region_key:
@@ -4597,7 +4603,11 @@ func _publish_region(
 	var stale_release_usec := Time.get_ticks_usec() - stale_release_started_usec
 
 	var registry_started_usec := Time.get_ticks_usec()
-	active_regions[id] = {"region_key": region_key, "world_state": state, "chunk_nodes": region_nodes}
+	active_regions[id] = {
+		"region_key": region_key, "world_state": state,
+		"chunk_nodes": region_nodes,
+		"dm18_identity_at_publish": _dm18_identity_for_state(state) if _dm18_cache_enabled else {}
+	}
 	# Visibility was non-authoritative; remove the provisional bookkeeping
 	# only after all 16 nodes have been adopted by the committed region.
 	_progressive_chunk_nodes.erase(id)
