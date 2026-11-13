@@ -114,6 +114,15 @@ func get_all_indexed_chunk_ids() -> Array[String]:
 	return ids
 
 
+## DM14: cleanup order is not semantically observable. Avoid sorting all
+## source chunk keys when detaching inactive derived reverse routes.
+func get_all_indexed_chunk_ids_unsorted() -> Array[String]:
+	var ids: Array[String] = []
+	for chunk_id in _frame_ids_by_chunk:
+		ids.append(String(chunk_id))
+	return ids
+
+
 func get_frame_count() -> int:
 	return _frames.size()
 
