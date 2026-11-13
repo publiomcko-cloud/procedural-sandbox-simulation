@@ -175,6 +175,8 @@ foreach ($route in $Routes) {
         $dm9VisualFieldMs = @()
         $dm9VisualMeshMs = @()
         $dm9VisualPrecomputeMs = @()
+        $dm9SessionStartUsec = -1L
+        $dm9FullHighUsec = -1L
         $dm9VisualLatticeMs = @()
         $dm9VisualRebuildMs = @()
         $dm9VisualChunkBuildMs = @()
@@ -186,6 +188,10 @@ foreach ($route in $Routes) {
             if ($start -lt 0) { continue }
             try { $event = $line.Substring($start + 11) | ConvertFrom-Json } catch { continue }
             switch ($event.event) {
+                'terrain_trace_session' { $dm9SessionStartUsec = [long]$event.t_usec }
+                'dm8_high_radial_complete' {
+                    if ($dm9FullHighUsec -lt 0) { $dm9FullHighUsec = [long]$event.t_usec }
+                }
                 'terrain_stream_budget_window' { $windows += $event }
                 'dm8_radial_gap_sample' { $radialSamples += $event }
                 'dm9_visual_shell_complete' {
@@ -307,6 +313,7 @@ foreach ($route in $Routes) {
             dm9_visual_worker_limit = $(if ($env:SANDBOX_DM9_VISUAL_WORKERS) { [int]$env:SANDBOX_DM9_VISUAL_WORKERS } else { 1 })
             dm9_visual_shell_complete_count = $dm9VisualWorkerMs.Count
             dm9_fast_b4 = ($env:SANDBOX_DM9_FAST_B4 -eq '1')
+            dm9_full_high_elapsed_ms = $(if ($dm9SessionStartUsec -ge 0 -and $dm9FullHighUsec -ge $dm9SessionStartUsec) { [Math]::Round(($dm9FullHighUsec - $dm9SessionStartUsec) / 1000.0, 3) } else { $null })
             dm9_visual_precompute_p50_ms = Get-Percentile $dm9VisualPrecomputeMs 0.50
             dm9_visual_precompute_p95_ms = Get-Percentile $dm9VisualPrecomputeMs 0.95
             dm9_visual_lattice_p50_ms = Get-Percentile $dm9VisualLatticeMs 0.50
