@@ -68,16 +68,16 @@ static func plan(
 			if mode == "guarded":
 				result["reason"] = "guarded_missing_core"
 				return result
-			interval = 1_000_000
-			result["reason"] = "moving_missing_core"
+			interval = 500_000 if mode == "corridor" else 1_000_000
+			result["reason"] = "corridor_missing_core" if mode == "corridor" else "moving_missing_core"
 		elif busy:
-			interval = 700_000
-			result["reason"] = "moving_canonical_busy"
+			interval = 450_000 if mode == "corridor" else 700_000
+			result["reason"] = "corridor_canonical_busy" if mode == "corridor" else "moving_canonical_busy"
 		else:
-			interval = 320_000
-			result["reason"] = "moving_core_ready"
+			interval = 240_000 if mode == "corridor" else 320_000
+			result["reason"] = "corridor_core_ready" if mode == "corridor" else "moving_core_ready"
 		if speed_mps >= FAST_MPS and (frame_ms >= 22.0 or process_ms >= 14.0):
-			interval = maxi(interval, 1_250_000)
+			interval = maxi(interval, 850_000 if mode == "corridor" else 1_250_000)
 			result["reason"] += "_frame_throttle"
 	result["interval_usec"] = interval
 	result["may_submit"] = since_last_submit_usec >= interval
