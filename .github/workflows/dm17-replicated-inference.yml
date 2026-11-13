@@ -1,0 +1,109 @@
+name: DM17 replicated inference - wallclock 18/54 mps ABBA and idle
+on:
+  push:
+    branches:
+      - exp/dm17-replicated-inference
+  workflow_dispatch:
+concurrency:
+  group: dm17-replicated-inference
+  cancel-in-progress: true
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 25
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: PowerShell syntax, Godot import and script parse
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          $path = (Resolve-Path .\scripts\perf\run-dm17-replicated-inference.ps1).Path
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors)
+          if ($errors.Count -gt 0) { $errors | Out-String | Write-Host; throw 'DM17_PS51_PARSE_FAILED' }
+          & $env:GODOT_BIN --headless --editor --path .\game --import
+          if ($LASTEXITCODE -ne 0) { throw 'DM17_GODOT_IMPORT_FAILED' }
+          foreach ($script in @(
+            'res://scripts/experiments/dm17_shared_region_lattice.gd',
+            'res://scripts/experiments/discrete_surface_nets_backend.gd',
+            'res://scripts/terrain/terrain_demo.gd',
+            'res://tests/experiments/dm17_sparse_lattice_contract.gd'
+          )) {
+            & $env:GODOT_BIN --headless --path .\game --check-only --script $script
+            if ($LASTEXITCODE -ne 0) { throw "DM17_GODOT_PARSE_FAILED $script" }
+          }
+          Write-Host 'DM17_REPLICATION_PREFLIGHT_PASS'
+      - name: Exact full-lattice and geometry parity plus DM11 regression
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          foreach ($case in @(
+            @{file='res://tests/experiments/dm17_sparse_lattice_contract.gd'; expect='DM17_SPARSE_LATTICE_PASS'},
+            @{file='res://tests/experiments/dm11_canonical_b4_parity.gd'; expect='DM11_CANONICAL_PARITY_PASS'}
+          )) {
+            $out = & $env:GODOT_BIN --headless --path .\game --script $case.file 2>&1 | Out-String
+            Write-Host $out
+            if ($LASTEXITCODE -ne 0 -or -not $out.Contains($case.expect) -or $out -match 'SCRIPT ERROR:|Parse Error:|DM17_SPARSE_LATTICE_FAIL') {
+              throw "DM17_EXACT_REGRESSION_FAILED $($case.file)"
+            }
+          }
+          Write-Host 'DM17_REPLICATION_EXACT_PASS'
+
+  replicated:
+    needs: preflight
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 75
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+      SANDBOX_TERRAIN_BACKEND: b4
+      SANDBOX_DM9_FAST_B4: '1'
+      SANDBOX_DM9_PREFETCH: '0'
+      SANDBOX_DM9_VISUAL_ADAPTIVE: '1'
+      SANDBOX_DM9_VISUAL_WORKERS: '4'
+      SANDBOX_DM11_CANONICAL_FAST_B4: '1'
+      SANDBOX_DM11_VISUAL_LANE: '0'
+      SANDBOX_DM12_SURFACE_SLICE: '1'
+      SANDBOX_DM12_FRAME_TRACE: '0'
+      SANDBOX_DM13_WATER_WORKERS: '1'
+      SANDBOX_DM13_WATER_NATIVE: '1'
+      SANDBOX_DM14_DENSE_REQUIRED: '1'
+      SANDBOX_DM14_LAZY_ROUTES: '0'
+      SANDBOX_DM15_DORMANT_ROLLUP: '1'
+      SANDBOX_DM15_RELEASE_TRACE: '0'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Import on isolated runner workspace
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          & $env:GODOT_BIN --headless --editor --path .\game --import
+          if ($LASTEXITCODE -ne 0) { throw 'DM17_REPLICATION_IMPORT_FAILED' }
+      - name: 16 paired trials per normal route, 8 fast pairs and 4 idle pairs
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        timeout-minutes: 70
+        run: |
+          & .\scripts\perf\run-dm17-replicated-inference.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir (Join-Path $env:RUNNER_TEMP 'dm17-replication') -Pairs 16 -StressPairs 8 -IdlePairs 4 -MotionFrames 720 -IdleFrames 2400
+          if ($LASTEXITCODE -ne 0) { throw 'DM17_REPLICATION_RUN_FAILED' }
+          Write-Host 'DM17_REPLICATION_DATA_PASS'
+      - name: Preserve raw data and paired inference even on failure
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm17-replication-full-evidence
+          path: |
+            ${{ runner.temp }}\dm17-replication\**\*.log
+            ${{ runner.temp }}\dm17-replication\**\*.json
+            ${{ runner.temp }}\dm17-replication\*.json
+          retention-days: 21
+          if-no-files-found: warn
