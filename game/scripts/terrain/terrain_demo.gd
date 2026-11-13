@@ -23,6 +23,7 @@ const MaterialEnvironmentDomainScript := preload("res://scripts/simulation/mater
 const EnvironmentClimateDomainScript := preload("res://scripts/simulation/environment_climate_domain.gd")
 const EnvironmentHydrologyDomainScript := preload("res://scripts/simulation/environment_hydrology_domain.gd")
 const EnvironmentSurfaceCacheJobScript := preload("res://scripts/simulation/environment_surface_cache_job.gd")
+const DM12SnapshotBatch := preload("res://scripts/terrain/dm12_surface_snapshot_batch.gd")
 const EnvironmentVisualScript := preload("res://scripts/simulation/environment_visual_presentation.gd")
 const EnvironmentStartupLocation := preload("res://scripts/simulation/environment_startup_location.gd")
 const SimulationRuntimeStoreScript := preload("res://scripts/simulation/simulation_runtime_store.gd")
@@ -251,6 +252,8 @@ var _stream_window_stage_usec: Dictionary = {}
 # DM12 opt-in main-thread frame attribution. Per-frame timings are never
 # computed/printed during ordinary gameplay unless explicitly enabled.
 var _dm12_trace_enabled := false
+var _dm12_surface_slice := false
+var _dm12_surface_prepare: Dictionary = {}
 var _dm12_frame_id := 0
 var _dm12_frame_stage_usec: Dictionary = {}
 var _dm12_previous_stage_usec: Dictionary = {}
@@ -439,6 +442,9 @@ func _ready() -> void:
 	_dm12_trace_enabled = _perf_trace_enabled and OS.get_environment("SANDBOX_DM12_FRAME_TRACE") == "1"
 	if _dm12_trace_enabled:
 		print("DM12_FRAME_TRACE: enabled=1 per_frame_stage=1 previous_frame_delta=1 publication_correlation=1")
+	_dm12_surface_slice = _dm3_enabled() and OS.get_environment("SANDBOX_DM12_SURFACE_SLICE") == "1"
+	if _dm12_surface_slice:
+		print("DM12_SURFACE_SLICE: enabled=1 immutable_snapshot_chunk_batch=3 revision_gated=1")
 	_dm11_visual_dedicated = _dm3_enabled() and OS.get_environment("SANDBOX_DM11_VISUAL_LANE") == "1"
 	if _dm11_visual_dedicated:
 		print("DM11_VISUAL_LANE: isolated_native_threads=1 priority=low canonical_worker_pool_unchanged=1")
@@ -485,6 +491,7 @@ func _ready() -> void:
 			"dm9_visual_adaptive": _dm9_visual_adaptive,
 			"dm9_fast_b4": _dm9_fast_b4,
 			"dm11_visual_dedicated": _dm11_visual_dedicated,
+			"dm12_surface_slice": _dm12_surface_slice,
 			"dm11_canonical_fast_b4": OS.get_environment("SANDBOX_DM11_CANONICAL_FAST_B4") == "1",
 			"snapshot_budget_usec": MESH_SNAPSHOT_FRAME_BUDGET_USEC,
 			"upload_budget_usec": MESH_UPLOAD_FRAME_BUDGET_USEC,
@@ -1227,6 +1234,7 @@ func _stream_finish_frame() -> void:
 		"dm9_visual_adaptive": _dm9_visual_adaptive,
 		"dm9_fast_b4": _dm9_fast_b4,
 		"dm11_visual_dedicated": _dm11_visual_dedicated,
+		"dm12_surface_slice": _dm12_surface_slice,
 		"dm11_canonical_fast_b4": OS.get_environment("SANDBOX_DM11_CANONICAL_FAST_B4") == "1",
 		"dm9_visual_workers_in_flight": _dm3_shell_jobs.size(),
 		"dm9_visual_started_total": _dm9_shell_started_total,
@@ -2945,7 +2953,8 @@ func _process_surface_cache_jobs() -> void:
 				return a_distance < b_distance
 			return a_key.y < b_key.y if a_key.y != b_key.y else a_key.x < b_key.x
 		)
-		var dispatched := _dispatch_surface_cache_job(candidates[0])
+		var dispatched := _dm12_prepare_surface_cache_job(candidates[0]) if _dm12_surface_slice \
+			else _dispatch_surface_cache_job(candidates[0])
 		if dispatched.get("ok", false):
 			_surface_cache_dispatches_this_frame += 1
 			continue
@@ -2958,7 +2967,69 @@ func _process_surface_cache_jobs() -> void:
 			"snapshot:" + String(dispatched.get("reason", "rejected")))
 
 
-func _dispatch_surface_cache_job(id: String) -> Dictionary:
+
+## DM12 optional spill of the 16 immutable per-chunk SDF snapshots over
+## multiple _process frames. All original effect validation, revision gates,
+## worker construction and publication remain in _dispatch_surface_cache_job.
+func _dm12_prepare_surface_cache_job(id: String) -> Dictionary:
+	if not active_regions.has(id) or not _surface_cache_pending.has(id):
+		_dm12_surface_prepare.clear()
+		return {"ok": false, "reason": "surface_snapshot_batch_no_pending_region"}
+	var token: Dictionary = _surface_cache_pending[id]
+	var state: RefCounted = active_regions[id]["world_state"]
+	if int(state.brush_edits.revision) != int(token["terrain_revision"]) \
+		or int(state.brush_edits.get_instance_id()) != int(token["terrain_cache_scope_id"]) \
+		or int(object_stream.get_command_world_revision()) != int(token["terrain_effect_revision"]):
+		_dm12_surface_prepare.clear()
+		_queue_surface_cache_region(token["region_key"])
+		return {"ok": false, "pending": true, "reason": "surface_snapshot_batch_superseded"}
+	if _dm12_surface_prepare.get("id", "") != id \
+		or _dm12_surface_prepare.get("token", {}) != token:
+		_dm12_surface_prepare = {
+			"id": id,
+			"token": token.duplicate(true),
+			"batch": DM12SnapshotBatch.new(
+				token["region_key"],
+				int(token["terrain_revision"]),
+				int(token["terrain_cache_scope_id"])
+			)
+		}
+	var batch: RefCounted = _dm12_surface_prepare["batch"]
+	var step: Dictionary = batch.capture(state.brush_edits, 3, 2_500)
+	if not step.get("ok", false):
+		_dm12_surface_prepare.clear()
+		if String(step.get("reason", "")).contains("revision"):
+			_queue_surface_cache_region(token["region_key"])
+			return {"ok": false, "pending": true, "reason": String(step.get("reason", ""))}
+		return step
+	if _dm12_trace_enabled:
+		PerformanceTrace.emit("dm12_surface_snapshot_step", {
+			"region": [token["region_key"].x, token["region_key"].y],
+			"captured": int(step["captured"]),
+			"processed": int(step["processed"]),
+			"step_usec": int(step["elapsed_usec"]),
+			"complete": bool(step["complete"])
+		})
+	if not bool(step["complete"]):
+		return {"ok": false, "pending": true, "reason": "surface_snapshot_batch_incomplete"}
+	var inputs: Dictionary = batch.prepared_inputs()
+	if inputs.is_empty():
+		_dm12_surface_prepare.clear()
+		return {"ok": false, "reason": "surface_snapshot_batch_incomplete_inputs"}
+	var dispatched := _dispatch_surface_cache_job(id, inputs)
+	if dispatched.get("ok", false):
+		if _perf_trace_enabled:
+			PerformanceTrace.emit("dm12_surface_snapshot_complete", {
+				"region": [token["region_key"].x, token["region_key"].y],
+				"capture_calls": int(inputs.get("capture_calls", 0)),
+				"capture_total_usec": int(inputs.get("capture_total_usec", 0)),
+				"chunk_count": (inputs["base_snapshots"] as Dictionary).size()
+			})
+	if dispatched.get("ok", false) or not bool(dispatched.get("pending", false)):
+		_dm12_surface_prepare.clear()
+	return dispatched
+
+func _dispatch_surface_cache_job(id: String, sliced_inputs: Dictionary = {}) -> Dictionary:
 	if not active_regions.has(id) or not _surface_cache_pending.has(id):
 		return {"ok": false, "reason": "surface_cache_region_not_pending"}
 	var token: Dictionary = _surface_cache_pending[id]
@@ -2974,31 +3045,35 @@ func _dispatch_surface_cache_job(id: String) -> Dictionary:
 		return {"ok": false, "pending": true, "reason": "surface_cache_token_changed"}
 
 	var snapshot_started_usec := Time.get_ticks_usec()
-	var base_snapshots: Dictionary = {}
-	var effect_targets: Array[Dictionary] = []
-	var anchor_snapshot: Dictionary = {}
-	for coordinate in ChunkGrid.all_coordinates():
-		var base_snapshot: Dictionary = state.brush_edits.get_meshing_snapshot_for_chunk(
-			region_key, coordinate
-		)
-		if not base_snapshot.get("valid", false):
-			return {
-				"ok": false,
-				"reason": String(base_snapshot.get("storage_error", "surface_cache_snapshot_invalid")),
-			}
-		if (
-			int(base_snapshot.get("revision", -1)) != int(token["terrain_revision"])
-			or int(base_snapshot.get("cache_scope_id", -1))
-				!= int(token["terrain_cache_scope_id"])
-		):
-			return {"ok": false, "pending": true, "reason": "surface_cache_snapshot_stale"}
-		base_snapshots[coordinate] = base_snapshot
-		effect_targets.append({
-			"region_key": region_key,
-			"chunk_coordinate": coordinate,
-		})
-		if anchor_snapshot.is_empty():
-			anchor_snapshot = base_snapshot
+	var base_snapshots: Dictionary = sliced_inputs.get("base_snapshots", {})
+	var effect_targets: Array[Dictionary] = sliced_inputs.get("effect_targets", [])
+	var anchor_snapshot: Dictionary = sliced_inputs.get("anchor_snapshot", {})
+	if sliced_inputs.is_empty():
+		for coordinate in ChunkGrid.all_coordinates():
+			var base_snapshot: Dictionary = state.brush_edits.get_meshing_snapshot_for_chunk(
+				region_key, coordinate
+			)
+			if not base_snapshot.get("valid", false):
+				return {
+					"ok": false,
+					"reason": String(base_snapshot.get("storage_error", "surface_cache_snapshot_invalid")),
+				}
+			if (
+				int(base_snapshot.get("revision", -1)) != int(token["terrain_revision"])
+				or int(base_snapshot.get("cache_scope_id", -1))
+					!= int(token["terrain_cache_scope_id"])
+			):
+				return {"ok": false, "pending": true, "reason": "surface_cache_snapshot_stale"}
+			base_snapshots[coordinate] = base_snapshot
+			effect_targets.append({
+				"region_key": region_key,
+				"chunk_coordinate": coordinate,
+			})
+			if anchor_snapshot.is_empty():
+				anchor_snapshot = base_snapshot
+	elif base_snapshots.size() != ChunkGrid.all_coordinates().size() \
+		or effect_targets.size() != base_snapshots.size() or anchor_snapshot.is_empty():
+		return {"ok": false, "reason": "surface_snapshot_batch_invalid_inputs"}
 
 	var prepared_region := _prepare_terrain_effect_snapshot(
 		anchor_snapshot, effect_targets
