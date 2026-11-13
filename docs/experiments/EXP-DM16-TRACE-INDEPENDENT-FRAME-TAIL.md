@@ -60,4 +60,38 @@ $env:SANDBOX_DM15_DORMANT_ROLLUP = "1"
 & .\scripts\perf\run-dm16-trace-factorial.ps1 -GodotBin "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" -EvidenceDir ".\dm16-evidence"
 ```
 
-**Status técnico no momento do checkpoint:** novo coletor e sua validação de sintaxe e contrato passaram, bem como as regressões DM15/DM14. A matriz nove ensaios prossegue; veredito de desempenho deve ser baseado nos resultados finais da CI e não estimado.
+**Status final:** contrato e compilação PASS; segunda matriz de nove ensaios PASS. Primeira matriz de nove ensaios produziu dados válidos, mas a etapa de agregação PowerShell falhou porque `Measure-Object -Property` não reconheceu uma hashtable; correção para `[pscustomobject]` foi aplicada antes da segunda execução. Resultados de ambos os grupos são auditáveis nos logs e artefatos de CI.
+
+
+## Resultado final — quatro repetições móveis por modo
+
+- [Primeira execução, dados completos / agregador falhou](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43469762099): **9/9 ensaios geraram receipts íntegros**, artefato preservado. Falhou somente a conversão das hashtables para `Measure-Object` após os nove testes.
+- [Execução qualificada](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43471240089): **exact PASS, factorial PASS**, scripts PowerShell 5.1 corrigidos, 9/9 ensaios com todas as invariantes. É o veredito de CI da DM16.
+- Ao combinar os dois grupos válidos temos **4×720 frames móveis por modo (2.880)** e **2×3600 frames estacionários por modo (7.200)**. Instrumentação, terreno, seed e configuração de workers idênticos; alteração entre commits restrita a agregação pós-processamento PowerShell. São apenas quatro repetições, sem garantia de significância estatística.
+
+| Métrica móvel média | OFF (0 eventos PERF) | LIGHT (0 eventos PERF) | FULL (tracing DM15 agregado) |
+|---|---:|---:|---:|
+| Frames >33ms | **0,278%** | 0,417% | 1,979% |
+| Frames >20ms | **0,973%** | 1,250% | 8,333% |
+| Frame p99 | **19,391ms** | 22,532ms | 51,933ms |
+| Frame médio | **16,872ms** | 16,908ms | 17,862ms |
+| Duração média completa de `_process` | 5,994ms | **5,943ms** | 10,115ms |
+| Foco canônico ausente | 32,951% | 33,056% | **26,215%** |
+| Regiões HIGH visuais concluídas | 65,0 | 66,25 | 72,75 |
+| Eventos `PERF_TRACE` nos quatro testes | **0** | **0** | 14.309 |
+
+**Overhead:** o FULL apresentou cerca de **7,1×** a taxa de frames >33ms e p99 de **2,68×** frente ao OFF. Os quatro ensaios FULL apresentaram >33ms variando de 0,556% a 4,861%, refletindo grande variabilidade do scheduler/console. As métricas representam **instrumentação + logging** combinados; não atribuir todo o incremento exclusivamente à serialização de JSON. No OFF, a taxa >33ms variou de 0,139% a 0,417%. São headless, não medem frame de GPU real.
+
+**Viés de movimento:** com FULL, o core ausente cai artificialmente de ~33% a ~26%, e HIGH visuais concluídas aumentam (65→73), apesar da execução mais lenta. O benchmark move a câmera por `STREAM_BENCH_STEP_SEC` por frame, e não pelo tempo real decorrido. Um frame atrasado por log permite aos workers avançarem mais no tempo real antes de o jogador progredir na distância simulada; **isso não deve ser chamado de melhoria canônica**. O novo baseline para otimizações de movimento deve ser o modo OFF e a próxima fase deve ter uma rota a **velocidade por tempo de parede**.
+
+**Parado:** em ambos os ensaios, todas as **268 regiões HIGH externas** e o núcleo canônico 3×3 foram concluídos nos três modos. Tempo médio até HIGH completo: OFF **13,652s**, LIGHT **13,379s**, FULL **14,469s**. Frames >33ms parado: OFF **0,084%**, LIGHT **0,083%**, FULL **0,778%**. O console completo piora a cauda também sem movimento.
+
+**Picos residuais:** na coleta LIGHT de quatro percursos, foram apenas **12 frames >33ms** em 2.880 frames; classificações da etapa dominante do **`_process` anterior**: `sdf_cache` **5**, `mesh_dispatch_and_upload` **1**, `effect_prefetch` **1**, `focus_window_lookahead` **1** e sem etapa atribuída **4** (incluindo potenciais frames de inicialização). Picos de etapa em LIGHT: `sdf_cache` **22,793ms**, visual HIGH **14,852ms**, foco **9,791ms**, dispatch **8,541ms**, effect prefetch **8,273ms**, water visual **2,956ms**. Esses valores são correlações temporais e máximos individuais, não provas de causalidade do delta.
+
+### Veredito
+
+**`DM16_TRACE_INDEPENDENT_QUALIFIED_OVERHEAD_CONFIRMED`**. A nova instrumentação leve e independente foi validada, os dois conjuntos de medições mostram forte contaminação de cauda e cobertura pelo tracing completo, e o problema residual de frames lentos no headless sem tracing é raro. **Não alterar mesh, SDF, água ou LOD com base nos picos com PERF_TRACE=1**. Usar OFF para taxa de gaps/FPS e LIGHT para localizar estágios, mantendo os dados iguais no laboratório.
+
+O trace OFF ainda conserva um coletor O(1) em memória no modo benchmark; fora do benchmark DM16 não existe overhead. Sem renderização interativa GPU, nenhum desses números valida a experiência visual real. `main` permanece intocada.
+
+**Próxima direção fundamentada:** criar teste F10 a **18m/s por tempo decorrido real**, com logs OFF e LIGHT, verificando a disponibilidade canônica sob carga sem distorção temporal. Somente depois otimizar os picos remanescentes do SDF cache/snapshots de efeitos e a publicação de meshes. O teste GPU/local permanece necessário para p99 de frame renderizado.
