@@ -4478,6 +4478,17 @@ func _prepare_terrain_effect_snapshot(
 				selected_id, stage_token,
 				prepared.get("missing_source_regions", [])
 			)
+			# DM26 read-only source-state census, same observer in both A/A arms.
+			var dm26_states: Array[Dictionary] = []
+			if terrain_effect_runtime != null:
+				for source in prepared.get("missing_source_regions", []):
+					if source is Vector2i:
+						dm26_states.append(
+							terrain_effect_runtime.dm26_scope_state(source)
+						)
+			_dm24_funnel.dm26_observe_sources(
+				selected_id, stage_token, dm26_states
+			)
 	if prepared.get("ok", false):
 		_terrain_effect_status = "Terrain-object effects active (%d frame(s), %d resident scope(s))" % [
 			int(prepared.get("effect_count", 0)),
