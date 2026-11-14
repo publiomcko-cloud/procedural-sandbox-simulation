@@ -65,3 +65,56 @@ No único par warm-long, ambos os braços iniciaram **132 LOAD stages** como viz
 **Interpretação provisória:** a DM22 não conseguia classificar dependências warm-long porque o estágio é iniciado como vizinho; DM23 recuperou a trajetória e apontou uma espera longa **antes mesmo da primeira tentativa** de preparação de efeitos. O gargalo sustentado pode estar na elegibilidade/prioridade do dispatcher canônico ou na competição de etapas, não necessariamente no worker de projeções. A emissão de `prepare_targets_snapshot` para o primeiro chunk é praticamente imediata nos poucos estágios efetivamente submetidos. Isso ainda exige replicação e rastreamento de todos os 16 chunks para diagnosticar publicação completa.
 
 A `main` permanece sem alterações. Não promover policy DM23-F antes dos resultados replicados, da análise pareada e do teste visual GPU.
+
+
+## Avaliação terminal — 36 ensaios replicados (2026-11-14)
+
+[GitHub Actions run 43595190616](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43595190616): \`completed / success\`, conclusão em 2026-11-14 12:59 UTC (09:59 Brasília), SHA do teste \`edbf2f88fe1267161fcfda3e5356088ed46b7417\`. Jobs \`exact\`, \`smoke\` e \`factorial\` **PASS**. O benchmark replicado contém **36 corridas, 18 pares**, separados do smoke de 8 corridas: 6 pares cold-forward, 4 warm-forward, 6 warm-long e 2 idle. Todos os recibos qualificados confirmaram \`trace_enabled=true\` em ambos os braços, DM22 e DM23 probes habilitados, mesmo perfil e instrumentos, DM18 ON, sem DM20/DM21 e sem heavy perf trace. Não houve merge em \`main\`.
+
+### Cobertura e cauda de frame (A/B pareado)
+
+Diferenças \`fair - control\`; valores negativos são menores em ambas métricas. Intervalos de confiança 95% t de Student calculados **sobre diferenças entre pares**, não sobre os 720/2400 frames correlacionados.
+
+| Regime | n pares | Foco ausente, controle → fair | Δ ausência, p.p. [IC95%] | p99 controle → fair | Δ p99 [IC95%] |
+|---|---:|---|---|---|---|
+| Cold-forward | 6 | **33,2175% → 36,9675%** | **+3,750 [−2,221; +9,721]** | 21,624 → 18,914ms | −2,710 [−6,124; +0,704]ms |
+| Warm-forward | 4 | **0,000% → 1,4235%** | **+1,424 [−2,276; +5,123]** | 25,177 → 21,750ms | −3,427 [−8,956; +2,101]ms |
+| Warm-long | 6 | **24,2013% → 23,7918%** | **−0,4095 [−0,931; +0,112]** | 17,904 → 18,056ms | +0,1525 [−0,240; +0,545]ms |
+| Idle | 2 | N/A | N/A | 16,667 → 16,667ms | 0ms (limite de FPS; não demonstra equivalência) |
+
+Nenhum dos IC95% de ausência canônica ou p99 exclui zero. A amostra, apesar das repetições, **não demonstra ganho estatístico de cobertura** nem garante ausência de regressões de cauda. O sinal de melhora p99 em cold não valida uma política que entrega menos chunks canônicos: \`worker_jobs\` caiu de **517,17 para 494,50** por corrida, diferença pareada −22,67 [−42,03; −3,31]. A comparação de vários indicadores é exploratória; não foi aplicada correção de múltiplos testes.
+
+### Mecanismo de justiça temporal: realmente aplicado onde havia disputa
+
+No cold-forward, por corrida:
+- Repriorizações urgentes realizadas: **1.266,67 controle → 285,00 fair** (−77,5%).
+- Reordenações suprimidas no tratamento por cooldown: **1.950,33**; 14 slots de geração para fontes envelhecidas por corrida. O controle registrou apenas a decisão shadow, sem modificar despacho.
+- **Latência total por fonte publicada:** 1.005,71ms controle → **1.073,41ms fair**, diferença pareada **+67,70ms [IC95% +33,61; +101,79]**. Esta é uma piora nominal robusta nesse dataset, mas envolve apenas fontes que publicaram e faz parte de uma família maior de comparações exploratórias.
+- Tempo médio na fila de fontes publicadas: **799,12ms → 867,60ms**; \`effect.pending\` 256,5 → 332,0 por execução. É plausível que suprimir promoções urgentes deslocou scopes indispensáveis para a região focal, apesar de evitar churn.
+- \`over33%\` 0,278 → 0,255, diferença pareada −0,023 p.p. [−0,257; +0,210]; sem ganho comprovado.
+
+No **warm-forward** e **warm-long**, controle e fair tiveram **zero** slots envelhecidos aplicados, zero cooldowns aplicados, zero repriorizações urgentes. Portanto a intervenção **não foi exercitada nesses dois regimes**; as diferenças de cobertura observadas são variação de ordem/tempo do runner e não evidência de ganho de uma política inativa. O idle teve apenas 6 slots envelhecidos aplicados em média e 268 HIGH concluídos em ambas variantes; tempo para HIGH total 13,085s controle e 12,770s fair, com n=2 insuficiente para aprovação.
+
+DM18: warm-long registrou 50,17 vs 51 hits médios por corrida; não há sinal inequívoco de violação dos contratos. Nenhuma alteração na revisão de edição, source authority, worker slots (2+2), radius ou layout do mundo. Contudo, os testes são headless e não substituem qualificação visual GPU, edits/undo, objetos e colisões.
+
+### Descoberta mais relevante: regiões que se tornam focais antes do primeiro chunk
+
+O novo probe acompanha o estágio desde o \`LOAD\` como vizinho até a entrada no foco. No warm-long:
+
+| Indicador médio por corrida | Controle | Fair |
+|---|---:|---:|
+| Estágios LOAD iniciados | 132 | 132 |
+| Vizinhos que entraram no foco | 14,00 | 12,83 |
+| Desses, ainda aguardando o 1º chunk ao entrar no foco | **11,00** | **10,83** |
+| Cancelados antes de despachar o 1º chunk | **30,00** | **30,00** |
+| Criação do LOAD → 1º chunk despachado, entre submetidos | **638,14ms** | **613,20ms** |
+| Primeira tentativa efetiva de snapshot → 1º despacho, entre submetidos | **0,073ms** | **0,074ms** |
+| Ausência da região focal | **24,20%** | **23,79%** |
+
+**Interpretação:** no movimento sustentado a maioria dos vizinhos que passam a foco ainda não recebeu o primeiro chunk, e cerca de 30 estágios/execução deixam a janela antes de despachar um único chunk. O tempo da primeira tentativa de snapshot até o despacho é quase zero **apenas na população que conseguiu despachar**: é uma amostra seletiva, portanto não prova ausência de espera por efeitos nos estágios bloqueados/cancelados. Porém, a política DM23 para fontes não se ativou e não explica o ~24% de foco ausente. O próximo ponto de investigação mais defensável é o ciclo completo \`created → eligible → selected → snapshot first attempted → first dispatch → 16 chunks complete → published / cancelled\` de cada estágio canônico e sua distância do foco, além de medir o efeito de prioridade canônica com **justiça temporal** em todos os estágios LOAD, mantendo despesas do probe idênticas nos dois braços e worker budgets fixos. Um foco exclusivo em scopes/projeções tem baixo poder para explicar o regime warm-long observado.
+
+### Decisão final
+
+**\`DM23_FAIR_SOURCE_QUEUE_NOT_QUALIFIED_FOR_PROMOTION\`.** O CI validou a execução do tratamento e a integridade sintática/regressões, **não um ganho de desempenho**. Não habilitar \`SANDBOX_DM23_FAIR_SOURCE_QUEUE\` no perfil padrão e não integrar a política no \`main\`. Preservar o DM18 e documentação de DM22/DM23. A próxima campanha deve medir o motivo exato de espera do estágio antes da primeira tentativa de snapshot e distinguir seleção da fila canônica, bloqueios de workers, budget por frame, LOD, effects e cancelamentos, inclusive o estágio que já começou como vizinho. Só então experimentar prioridade temporal canônica com baseline **igualmente instrumentado**, evitando repetir experimentos de pura reordenação (DM20-B) sem uma explicação causal.
+
+Relatório final publicado após leitura dos 36 recibos e 18 pares. Evidência auditável no artifact do [run 43595190616](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43595190616). **\`main\` inalterada.**
