@@ -7,7 +7,7 @@ Data: 2026-11-13. Escopo: Godot 4.7.2, Windows runner headless, 18 m/s (54 m/s e
 1. [DM19 attribution, 12 execuções, PASS](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43513521113): atribuição de tempo do estágio e teste do overhead dos diagnósticos.
 2. [DM19-B cold A/B, 24 execuções, PASS](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43515643551): 8 pares straight-18, 4 pares outback-long-18, DM19-B ON/OFF; mesmas condições/flags DM18 ON.
 3. [DM19 stationary warmup vs cold, 12 execuções, PASS](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43529033568): 6 pares com/sem 900 frames de pré-aquecimento estacionário, 720 frames de movimento a 18 m/s; flag DM19-B OFF, DM18 ON.
-4. [DM19-B direct A/B after 900-frame prewarm](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43529578614): 8 pares straight-18, 2 pares outback-long-18, em execução no momento da primeira redação deste relatório. O diagnóstico é reiniciado após pré-aquecimento, cache e world state persistem.
+4. [DM19-B direct A/B after 900-frame prewarm](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43529578614): 8 pares straight-18, 2 pares outback-long-18, **concluída com sucesso**; ver veredito abaixo. O diagnóstico é reiniciado após pré-aquecimento, cache e world state persistem.
 
 ## Diagnóstico do gargalo (DM19)
 
@@ -60,3 +60,46 @@ Critérios antes de examinar o teste direto de pós-aquecimento:
 5. Não mudar o perfil HIGH, o cache DM18, as revisões/snapshots de efeitos, colisões, objetos ou a `main`.
 
 Limites: mesma máquina, headless, uma seed e janelas de 12s/40s; intervalos de confiança sobre pares com autocorrelação possível do runner; testes de integridade e paridade aprovados, mas sem equivalência visual GPU validada.
+
+## DM19-B: A/B direto **após** 900 frames de pré-aquecimento — veredito terminal
+
+[Github Actions run 43529578614 — PASS](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43529578614), commit de código `85112e61744426de2ed1bb293a14f7549d575802`, 20 ensaios distribuídos em 8 pares `prewarmed-straight` e 2 pares `prewarmed-revisit`. Exato + regressões PASS. Nos dois braços: cache DM18 ON, DM19 diagnose ON, 900 frames estacionário, seed 424242, `adaptive-skip-progressive`, 18 m/s wall clock, 720/2400 frames medidos, tracing pesado OFF. **Única diferença**: `SANDBOX_DM19_EFFECT_MOTION_PRIORITY` ON/OFF.
+
+### Percurso curto, ainda com regiões inéditas (8 pares)
+
+| Métrica | OFF | ON | Diferença ON−OFF / IC 95% |
+|---|---:|---:|---:|
+| Foco canônico ausente | 3,663% | 3,819% | **+0,156 p.p.**, [−4,083; +4,396] |
+| Frame p99 | 27,063ms | 27,722ms | **+0,659ms**, [−3,734; +5,051] |
+| Frames >33ms | 0,365% | 0,469% | **+0,104 p.p.**, [−0,185; +0,393] |
+| Jobs canônicos | 739,75 | 737,5 | −2,25, IC [−23,04; +18,54] |
+| Efeitos `pending` durante percurso | **0** | **0** | 0 |
+| Frames esperando primeiro despacho do foco | **0** | **0** | 0 |
+| Média até primeiro despacho das regiões publicadas | 534,14ms | 551,51ms | +17,37ms (descritivo) |
+| Efetivas reordenações de fontes por corrida | 0 | **9,875** | política acionada, sem efeito reproduzível |
+
+A comparação em mundo pré-aquecido não reproduziu o ganho de −4,6355 p.p. observado na partida a frio. A diferença de foco não é estatisticamente distinguível de zero; 2 pares favorecem ON, 4 favorecem OFF e 2 empatam. Os picos >33ms aumentaram nominalmente, mas CI ainda é inconclusivo. O resultado `0 effect pending` indica que a preparação inicial das projeções já está pronta para o percurso curto — não que qualquer região futura do mundo esteja pronta.
+
+### Ida e volta longa, além do pré-aquecimento (2 pares)
+
+| Métrica | OFF | ON | Diferença ON−OFF / IC 95% |
+|---|---:|---:|---:|
+| Foco canônico ausente | 24,771% | 24,542% | **−0,229 p.p.**, [−3,672; +3,214] |
+| Frame p99 | 18,395ms | 21,225ms | **+2,829ms**, [−33,123; +38,782] |
+| Frames >33ms | 0,104% | 0,229% | **+0,125 p.p.**, [−1,997; +2,247] |
+| Cache hits DM18 | 49 | 49,5 | Cache ativo, sem quebra |
+| Efeitos `pending` durante percurso | 683,5 | 677 | Só −6,5 por execução |
+| Reordenações de fontes | 0 | 21,5 | Política acionada |
+
+Longa distância ainda gera novas dependências de efeitos; entretanto, reordenar *apenas solicitações na fila existente* não resolve in-flight e progresso de publicação. A amostra longa (2 pares) não estabelece equivalência nem regressão com significância; é suficiente somente para concluir ausência de prova positiva de ganho e manter a flag experimental.
+
+### Veredito consolidado — `DM19_B_COLD_BENEFIT_STEADY_GAIN_UNPROVEN`
+
+1. **DM19-B OFF por padrão; não promover à main.** Na partida a frio houve ganho estatisticamente consistente de disponibilidade, mas após pré-aquecimento o ganho não é reproduzível e existe risco não descartado de piora de tail frame.
+2. **Manter DM18 ON no branch experimental e não alterar políticas HIGH**, conforme aprovação visual do usuário. A execução DM19 nunca substituiu ou desativou DM18.
+3. **Foco arquitetural seguinte:** tratar as duas fases separadamente: startup (efeitos e canônico pré-carregados sem bloquear a UI), e movimento sustentado em regiões inéditas (projeções ainda não geradas, backlog/in-flight e janela de despachos canônicos).
+4. Não inferir que pré-aquecer 900 frames deve ser exigido ao usuário. É controle de benchmark; a solução de produção deve antecipar trabalhos de forma incremental e respeitar orçamento do main thread.
+5. Para novo experimento, comparar A/B de *preparação progressiva ahead* de fontes e snapshots e, de modo independente, aumentar a **prioridade** do job canônico focal sem inflar globalmente a quantidade de workers. Exigir paridade de revisões/edits/effects, sem ampliar orçamento HIGH, e p99/frames>33ms sem regressão.
+6. Limitações: apenas um runner Windows, Godot headless, uma seed, comprimento limitado de rota, apenas 2 pares de longas revisitas, nenhuma qualificação interativa de GPU. Portanto não há autorização para promoção automática da flag.
+
+**Arquivos de experimento:** `exp/dm19-effect-motion-priority` e `exp/dm19-warm-motion-priority-validation`. A `main` segue intocada.
