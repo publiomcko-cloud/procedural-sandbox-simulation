@@ -53,3 +53,48 @@ The first DM24 workflow, [run 43605757279](https://github.com/publiomcko-cloud/p
 The DM24 probe counts 721 stage-dispatch frame observations for 720 measured warm-route frames because the warmup counters reset during pre-stream motion **before the warmup boundary frame reaches the canonical dispatcher**; the same frame is present under the same instrumentation and conditions in the control and treatment. Therefore the per-dispatch receipt invariant was corrected to require exactly `frames + 1` for warm routes and exactly `frames` for cold and idle routes. The game's scheduling code, instrumentation overhead and treatment behavior were **not changed** by this correction. [Corrected workflow 43606090913](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43606090913) repeats all tests from the revised commit `111c3003fd7ef37bfb8edf1dc3db0ac313e54dbc`; exact qualification PASS. Do not mix any failed-run results with corrected benchmark replications.
 
 The two cold-forward pairs from the failed harness attempt showed `fair−control` canonical absence −3.056 and −3.333 p.p., while p99 rose +4.979ms and +1.389ms. These four runs are **exploratory only** and are **not valid evidence of net performance improvement**, particularly given tail regression and small n. The qualified campaign's smoke and replication determine the verdict.
+
+
+## Terminal outcome — corrected 40-trial campaign
+
+**Source:** [completed corrected workflow, run 43606090913](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43606090913), commit \`111c3003fd7ef37bfb8edf1dc3db0ac313e54dbc\`, all three jobs PASS (exact, smoke, factorial). Artifact \`dm24-stage-validated-evidence\` (ID 14119642579) contains 40 trial receipts, paired results, stdout/stderr and aggregate summaries. The completion receipt is \`DM24_STAGE_FUNNEL_FAIRNESS_AB_REVIEW_REQUIRED\`: this is **not** a policy promotion approval. Smoke 10/10 and factorial 40/40 complete. DM18 unchanged, instrumentation enabled in BOTH arms, heavy perf trace off. No change to \`main\`; GPU visual validation not performed.
+
+All differences below are **treatment minus control**; 95% intervals are Student-t intervals over *matched pairs*, not frame-level bootstrap intervals. Small samples and temporal runner variance constrain certainty.
+
+| Scenario | Matched pairs | Δ focal missing (percentage points) | 95% paired CI, p.p. | Δ p99, ms | Δ HIGH count | Δ creation→first dispatch, ms |
+| --- | ---: | ---: | --- | ---: | ---: | ---: |
+| cold-forward | 6 | −1.227 | [−6.497, +4.043] | +2.086 | +2.333 | −149.220 |
+| warm-forward | 4 | −1.215 | [−3.658, +1.228] | +3.599 | +1.250 | −89.029 |
+| **warm-long (primary)** | **8** | **+0.1405** | **[−0.080, +0.361]** | **0.000** | **+2.375** | **−80.176** |
+| idle | 2 | N/A | N/A | 0.000 | 0.000 | −289.580 |
+
+The primary warm-long comparison is ~23.833% missing in control and ~23.974% in treatment. All eight warm-long p99 receipts equal 18.056 ms in both arms; zero difference does not establish tail equivalence beyond the benchmark's measurement granularity. First-dispatch means describe successfully dispatched stages and may involve different stage cohorts across arms: do **not** infer that every focal gap advanced by 80 ms.
+
+**DM19 focal-gap-state decomposition, warm-long (mean frames per trial):**
+
+| State | Control | DM24-F |
+| --- | ---: | ---: |
+| awaiting_first_dispatch | 533.250 (93.23% of missing frames) | 533.500 (92.72%) |
+| submitting chunks | 20.375 | 29.250 |
+| awaiting_jobs_or_upload | 18.375 | 12.625 |
+| cached_waiting_publish | 0 | 0 |
+| not_requested | 0 | 0 |
+| **total missing frames** | **572.000** | **575.375** |
+
+The 40-trial summaries show DM24-F actually applied overrides (mean 73 selections/trial in warm-long), but warm-long ended-before-first-dispatch stages were unchanged at 30/trial in both arms. Warm-long selection-stage first snapshot→first dispatch for *successful* stages is ~0.09 ms, but this **excludes** stages blocked or cancelled before dispatch. Therefore these measurements neither exonerate effect dependency gating nor prove worker saturation. DM24's \`eligible_not_yet_submitted\` means available *frame and worker capacity*, not *confirmed effect-source readiness*: do not label those frames as runnable without further instrumentation.
+
+Cold-forward improved stage creation→first dispatch by ~149.2ms and decreased pre-first-dispatch cancellations (mean 11.167→5.000/trial), but focal absence had a paired CI spanning both benefit and harm while frame p99 increased 2.086ms on average. Warm-long is the pre-registered primary condition; neither secondary results nor HIGH count gains rescue promotion.
+
+**Decision:** \`DM24_POLICY_NOT_QUALIFIED_KEEP_DM18\`. Keep DM24-F OFF (the default), keep DM18 ON, and retain DM24 instrumentation as diagnostic. No merge into \`main\`, no production priority-policy change. Exact tests certify contracts, **not** a visual/p99 performance improvement.
+
+## DM25 recommended follow-up: causally resolved first-dispatch stall, diagnostics-first
+
+**Question:** Why do ~93% of warm-long missing-focus frames remain in \`awaiting_first_dispatch\` despite DM24-F changing the selected stage and reducing aggregate creation→first-dispatch time?
+
+1. Add **per-focal-stage/token, per-frame mutually exclusive** attribution for: not selected despite globally available budget/worker slot; selected but snapshot/effects pending; selected but frame/time/worker gate; first submission complete but remaining chunks not submitted; all chunks submitted but worker/upload/publish pending. Tie the observed state to DM19's actual missing-focus frame for the same region/token. Deduplicate multiple selection attempts inside a frame.
+2. Distinguish **globally eligible** from **source-ready/runnable**; link each pending first-chunk dependency to the DM22 source-scope lifecycle (queue → generation → projection → publication), with exact scope identity and revision, and note focus-entry, first runnable, first dispatch, cancellation, and stage-token replacement. Do not assume readiness just because workers and frame budget were available.
+3. Track longitudinal cohorts of regions that **actually enter focus**, including those whose stage was cancelled or never selected. Report censored stage times, outcomes, and per-frame gap contributions; do not compare only successful first-dispatch survivors. Preserve strict 16-chunk revision-gated publication and existing edit/partial/full precedence.
+4. Diagnostic-only first: run fixed-input **A/A with identical DM25 observer overhead** and the already accepted DM18 baseline; primary warm-long, secondary cold, with smoke then paired replication. Include a deliberate observer-on/off cost study in a separate *diagnostic* check to measure overhead, never use unequal-cost runs for a treatment performance comparison. If later testing a scheduling policy, turn its switch on only in treatment while running all observers and shadow computations identically in control.
+5. Only after stall attribution is supported, nominate **one** causal intervention targeting the dominant runnable-stage bottleneck. Hold worker count, budgets, radius, required effects, caches, authority, and publication checks fixed unless explicitly being experimentally tested. Require scenario-matched confidence intervals for focal coverage, p99, >33ms, HIGH, plus edition/effect/projection/cache parity and visual GPU review before any promotion.
+
+**Do not repeat DM20-B all-chunk priority, DM23 generic source fairness, or DM24-F age fairness as a presumptive fix.** The stage-level first-dispatch summary alone has not established a transferable improvement to warm-long canonical coverage.
