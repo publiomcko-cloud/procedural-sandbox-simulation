@@ -57,7 +57,7 @@ func _run() -> void:
 	_check(int(r["counts"]["neighbor_became_focus"]) == 1, "focus entry observed")
 	_check(int(r["counts"]["neighbor_first_chunk_already_submitted_before_focus"]) == 1,
 		"neighbor first chunk already submitted")
-	_check(int(r["counts"]["neighbor_published_before_focus"]) == 0,
+	_check(int((r["counts"] as Dictionary).get("neighbor_published_before_focus", 0)) == 0,
 		"published after focus")
 	_check(int(r["counts"]["canonical_loads_published"]) == 1, "canonical publish")
 	_check(int(r["counts"]["stage_dependency_scope_resolved"]) == 2,
