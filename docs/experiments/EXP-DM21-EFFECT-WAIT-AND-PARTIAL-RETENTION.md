@@ -44,3 +44,29 @@ Branch `exp/dm21-effect-readiness-and-stage-retention`, workflow [DM21 Actions](
 ## Status
 
 Implementation + contracts qualified. Benchmark smoke and replication in progress as of the initial document; results must be appended from real GitHub Actions job logs. **Default remains DM21 A/B OFF, DM18 preserved as user-approved experimental baseline, `main` unchanged.**
+
+
+## Evidência do smoke integrado — 16 execuções, PASS
+
+GitHub Actions [43586067986](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43586067986), commit qualificado `7ed9170866184135b43556a66b765c8c7a8e134d`. `exact` PASS, `smoke` PASS. Duas repetições por cenário de 720 frames, mesmos 18m/s, DM18 ON.
+
+| Cenário | Braço | Foco canônico ausente | Frame p99 | Preparações efeitos pending | Retenções / completas |
+|---|---|---:|---:|---:|---:|
+| Cold straight | Controle | 32,986% | 19,639ms | 278,5 | 0 / 0 |
+| Cold straight | A | 41,042% | 20,074ms | 20,5 | 0 / 0 |
+| Cold straight | B | 34,514% | 20,761ms | 274,5 | 2 / 0 |
+| Cold straight | A+B | 38,820% | 21,950ms | 26,0 | 2,5 / 0 |
+| Warm straight | Controle | 0,000% | 24,663ms | 182,0 | 0 / 0 |
+| Warm straight | A | 1,875% | 28,444ms | 10,0 | 0 / 0 |
+| Warm straight | B | 1,875% | 21,486ms | 173,0 | 0 / 0 |
+| Warm straight | A+B | 5,486% | 25,676ms | 12,5 | 0 / 0 |
+
+A efetivamente registrou 19,5 esperas, suprimiu 306,5 repetidas tentativas e observou 127 notificações por cold run; apenas 6,5 rechecks se deram pelo watchdog, zero token/revisão rejeitados. Em warm: 9 registros, 180,5 tentativas suprimidas, 81,5 notificações e 5 watchdogs por run.
+
+B efetivamente conservou 2 estágios cold, mas **zero publicação de estágio conservado** antes do término da rota curta. Cancelamentos LOAD variaram controle 16,0 vs A 18,5, B 16,0, A+B 15,5 por cold run. **Não inferir redução de desperdício do simples contador de retenção.**
+
+**Leitura provisória:** A elimina a checagem repetida, mas aparentemente deixa alguns estágios mais tempo bloqueados; o custo reduzido de `prepare_targets_snapshot` não foi convertido em melhor cobertura. B não exerceu a hipótese de conclusão de trabalhos reaproveitados no percurso curto. Doze pares adicionais em diferentes regimes e 56 ensaios replicados estão no job `factorial` em execução; não promover.
+
+### Gate
+
+Se a replicação não mostrar ganho reproduzível de cobertura e p99, deixar A e B OFF. Uma variante de A com notificação **por escopo efetivamente pendente**, que preserve prioridade urgente sem reenfileirar repetidamente 25 fontes, pode merecer teste separado; não alterar esta campanha durante a replicação.
