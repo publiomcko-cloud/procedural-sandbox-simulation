@@ -201,7 +201,7 @@ func set_dm22_probe(probe: RefCounted) -> void:
 ## Called after pending snapshot already enqueued all missing dependencies.
 func dm26_scope_state(source_region: Vector2i) -> Dictionary:
 	var scope_id := Contract.scope_id_for_region(source_region)
-	var resident := projection != null and projection.has_scope(source_region)
+	var resident: bool = projection != null and bool(projection.has_scope(source_region))
 	var invalidated := _invalidated_scope_ids.has(scope_id)
 	var protected := _protected_scope_ids.has(scope_id)
 	var queued_at := _prefetch_queue.find(source_region)
