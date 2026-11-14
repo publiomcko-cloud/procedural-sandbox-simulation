@@ -197,6 +197,57 @@ func set_dm22_probe(probe: RefCounted) -> void:
 	_dm22_probe = probe
 
 
+## DM26 — diagnostics only. No mutation, no authority, no queue priority.
+## Called after pending snapshot already enqueued all missing dependencies.
+func dm26_scope_state(source_region: Vector2i) -> Dictionary:
+	var scope_id := Contract.scope_id_for_region(source_region)
+	var resident := projection != null and projection.has_scope(source_region)
+	var invalidated := _invalidated_scope_ids.has(scope_id)
+	var protected := _protected_scope_ids.has(scope_id)
+	var queued_at := _prefetch_queue.find(source_region)
+	var generating := _prefetch_task_by_scope.has(scope_id)
+	var projecting := _prefetch_projection_task_by_scope.has(scope_id)
+	var ready := false
+	for record in _prefetch_projection_ready:
+		if String(record.get("scope_id", "")) == scope_id:
+			ready = true
+			break
+	var tracked := _prefetch_scope_ids.has(scope_id)
+	var state := "unknown"
+	if resident and not invalidated:
+		state = "resident_valid"
+	elif not protected:
+		state = "outside_protected"
+	elif generating:
+		state = "generation_inflight"
+	elif projecting:
+		state = "projection_inflight"
+	elif ready:
+		state = "projection_ready"
+	elif queued_at >= 0:
+		state = "queued_urgent" if _prefetch_urgent_scope_ids.has(scope_id) else "queued_normal"
+	elif tracked:
+		state = "tracked_without_queue_or_job"
+	else:
+		state = "protected_missing_untracked"
+	return {
+		"id": scope_id,
+		"state": state,
+		"resident": resident,
+		"invalidated": invalidated,
+		"protected": protected,
+		"tracked": tracked,
+		"queued_index": queued_at,
+		"generation_inflight": generating,
+		"projection_inflight": projecting,
+		"projection_ready": ready,
+		"queue_length": _prefetch_queue.size(),
+		"generation_jobs": _prefetch_generation_jobs.size(),
+		"projection_jobs": _prefetch_projection_jobs.size(),
+		"prefetch_error": not _prefetch_error.is_empty(),
+	}
+
+
 func dm23_fair_metrics() -> Dictionary:
 	var out := _dm23_metrics.duplicate()
 	out["fair_enabled"] = _dm23_fair_enabled
