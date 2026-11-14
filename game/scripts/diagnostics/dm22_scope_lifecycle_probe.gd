@@ -15,6 +15,9 @@ var _focus_order: Array[String] = []
 var _samples: Dictionary = {}
 var _counts: Dictionary = {}
 var _critical_scopes: Dictionary = {}
+var _recent_published: Dictionary = {}
+var _published_order: Array[String] = []
+var _critical_phase_counts: Dictionary = {}
 
 
 func queued(id: String, now: int, queue_depth: int, urgent: bool) -> void:
@@ -108,6 +111,21 @@ func published(id: String, now: int, publish_usec: int) -> void:
 		if proj_finish > 0:
 			_measure("projection_finish_to_publish_ms", maxi(0, now - proj_finish))
 		_measure("scope_publish_cpu_ms", publish_usec)
+		var phases := {
+			"queue": maxi(0, (gen_start if gen_start > 0 else proj_start) - enqueued),
+			"generation": int(d.get("generation_worker_usec", 0)),
+			"source_finalize": int(d.get("source_finalize_usec", 0)),
+			"projection": int(d.get("projection_worker_usec", 0)),
+			"projection_publish": publish_usec
+		}
+		_recent_published[id] = {
+			"total_usec": maxi(0, now - enqueued),
+			"phases": phases
+		}
+		_published_order.erase(id)
+		_published_order.append(id)
+		while _published_order.size() > MAX_SCOPES:
+			_recent_published.erase(_published_order.pop_front())
 		_scopes.erase(id)
 		_scope_order.erase(id)
 	else:
@@ -187,6 +205,22 @@ func focus_first_submitted(key: String, stage_token: int, now: int) -> void:
 	var critical_id := String(d.get("last_scope", ""))
 	if not critical_id.is_empty():
 		_critical_scopes[critical_id] = int(_critical_scopes.get(critical_id, 0)) + 1
+		var record: Dictionary = _recent_published.get(critical_id, {})
+		if not record.is_empty():
+			_measure("critical_scope_total_ms", int(record["total_usec"]))
+			var phases: Dictionary = record["phases"]
+			var dominant := "unknown"
+			var max_phase_usec := -1
+			for phase_value in phases:
+				var phase := String(phase_value)
+				var duration := int(phases[phase])
+				_measure("critical_" + phase + "_ms", duration)
+				if duration > max_phase_usec:
+					max_phase_usec = duration
+					dominant = phase
+			_critical_phase_counts[dominant] = int(
+				_critical_phase_counts.get(dominant, 0)
+			) + 1
 	_increment("focus_first_chunk_submitted")
 	_focus.erase(identity)
 	_focus_order.erase(identity)
@@ -231,6 +265,7 @@ func summary() -> Dictionary:
 		"counts": _counts.duplicate(),
 		"latency": stats,
 		"critical_scope_top": critical,
+		"critical_dominant_phases": _critical_phase_counts.duplicate(),
 		"scopes_in_trace": _scopes.size(),
 		"focus_requests_unfinished": _focus.size()
 	}
