@@ -111,10 +111,8 @@ try {
                 if (([int]$d.dispatch_frames.budget_one + [int]$d.dispatch_frames.budget_two) -ne $frames) {
                     throw "DM20_FRAME_ACCOUNTING_FAILED $trial"
                 }
-                if ($aOn -and [int]$c.prime_attempts -lt 1) { throw "DM20_PRIMER_NOT_EXERCISED $trial" }
-                if ($bOn -and [int]$c.priority_overrides -lt 1 -and $route -ne 'idle') {
-                    throw "DM20_FOCUS_PRIORITY_NOT_EXERCISED $trial"
-                }
+                # Record zero hits/overrides as a valid negative benchmark result.
+                # An opt-in algorithm must never be promoted based only on its flag.
                 if ([int]$s.dm18_cache.estimated_bytes -gt 134217728) { throw "DM20_DM18_CACHE_OVER_BUDGET $trial" }
                 $record = [pscustomobject][ordered]@{
                     trial=$trial;scenario=$name;block=$block;arm=$arm;sha=$sha
