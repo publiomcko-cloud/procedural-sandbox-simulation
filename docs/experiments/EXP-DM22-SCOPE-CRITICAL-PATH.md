@@ -29,3 +29,30 @@ Captures paired null-control differences in canonical focus absence, p99, >33ms,
 If last critical source is queue-bound, experiment with scheduling that scope first **but retain exact same observer in both A/B arms**. If generation CPU dominates, inspect source generation cost and caching before increasing worker parallelism. If projection or publication dominates, isolate pure builder vs main-thread reconcile budgets. If many sources are canceled and requeued, inspect window churn/positive cache without expanding the authoritative radius. Preserve revision-gated publication, object mod-first authority, DM18 cache, full HIGH and 18m/s benchmark; test GPU and edits/undo/caves before promotion.
 
 **Status at initial publication:** code integrated in experimental branch, CI exact + A/A smoke and replication launched, `main` untouched.
+
+
+## First integrated results — 6-trial instrumented A/A smoke (PASS)
+
+[Workflow run 43591999912](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43591999912), branch commit `40e5ddf8a488cd2b2a2bbf90a0008bcedec90194`: Godot 4.7.2 parser PASS, 22 DM22 assertions / zero failures, DM18 112/112, DM19 23/23, DM11 canonical parity, D7.3 source cache PASS; smoke PASS. Previous run failed a **harness-only invariant**: in a 900-frame warmed route, zero first focal chunk dispatches is valid because the focal region may already be loaded before measurement; this assertion was corrected, code and instrumentation unchanged.
+
+Four cold runs (2 A/A pairs), each 720 measured frames at 18m/s, shared full DM22 trace:
+
+| Measure | Mean over four cold runs |
+|---|---:|
+| Focus canonical missing frames | **40.764%** |
+| Source scope enqueue → generator dispatch queue wall time | **904.627ms** |
+| Generation worker CPU | **2.174ms** |
+| Projection worker CPU | **84.270ms** |
+| Scope publication main-thread CPU | **0.476ms** |
+| Critical last source queue delay (from original enqueue) | **1,693.040ms** |
+| Focus first-chunk blocked from first attempt | **350.357ms** |
+| Urgent source reorders per run | **1,288.25** |
+| Scope publications per run | **178.5** |
+
+All 16 first-chunk focal dependencies that were successfully linked in the four cold runs were dominated by the **pre-generation queue** phase; this does not imply those entire 1.69s were spent blocking the focus (many scopes were originally enqueued before the focus's first attempt). The gap from the last missing source publication to first focus chunk job dispatch is only ~4–5ms. The actual focus wait is measured separately.
+
+The two warmed runs had a shorter average source queue delay **166.819ms**, projection worker **94.5ms**, and **zero new first-focus initial dispatches** during their 720 measured frames. This is a *sampling limitation*, not proof of zero effect dependencies: work can start on a neighboring region before that region becomes focal. Further research must correlate the first chunk of a `LOAD` stage initiated as a neighbor with later focus entry.
+
+**Equal cost:** both arms report `trace_enabled=true`, same DM19 diagnostics and full lifecycle hooks. Their cold A/A differences in focus absence were +0.972 and −9.305 p.p. despite no code behavior difference; this demonstrates meaningful **runner/scheduling noise** and why uninstrumented-to-instrumented comparison would be invalid. An intervention must outperform this noise in a larger paired study.
+
+The 24-run replication is in progress; the smoke is not sufficient to approve source scheduling changes.
