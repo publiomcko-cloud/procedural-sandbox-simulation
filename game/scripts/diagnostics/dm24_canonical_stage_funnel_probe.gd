@@ -11,6 +11,16 @@ var _order: Array[String] = []
 var _counts: Dictionary = {}
 var _samples: Dictionary = {}
 
+# DM25 observer-only focal stall classification. Never influences dispatch.
+var _dm25_focus_key := ""
+var _dm25_frame_selected_focal := false
+var _dm25_frame_effect_pending := false
+var _dm25_frame_selected_other_load := false
+var _dm25_frame_selected_protected := false
+var _dm25_frame_budget := false
+var _dm25_frame_worker := false
+var _dm25_missing_source_hits: Dictionary = {}
+
 
 static func key(id: String, token: int) -> String:
 	return id + ":" + str(token)
@@ -46,8 +56,15 @@ func focus_enter(id: String, token: int, now_usec: int) -> void:
 func frame(stages: Dictionary, focus: Vector2i, limit: int,
 		used: int, worker_count: int, worker_limit: int) -> void:
 	_inc("instrumented_frames")
+	_dm25_focus_key = ""
+	_dm25_frame_selected_focal = false
+	_dm25_frame_effect_pending = false
+	_dm25_frame_selected_other_load = false
+	_dm25_frame_selected_protected = false
 	var has_budget := used < limit
 	var has_worker := worker_count < worker_limit
+	_dm25_frame_budget = has_budget
+	_dm25_frame_worker = has_worker
 	for id_value in stages:
 		var id := String(id_value)
 		var stage: Dictionary = stages[id]
@@ -61,6 +78,8 @@ func frame(stages: Dictionary, focus: Vector2i, limit: int,
 			continue
 		var s: Dictionary = _active[k]
 		var focal: bool = stage.get("region_key") == focus
+		if focal:
+			_dm25_focus_key = k
 		_inc("unsubmitted_stage_frames")
 		if focal:
 			_inc("unsubmitted_focal_frames")
@@ -96,6 +115,13 @@ func selected(original: Dictionary, shadow: Dictionary,
 		_inc("selector_empty")
 		return
 	var stage: Dictionary = stages.get(uid, {})
+	if not _dm25_focus_key.is_empty():
+		if key(uid, int(stage.get("stage_token", -1))) == _dm25_focus_key:
+			_dm25_frame_selected_focal = true
+		elif String(stage.get("purpose", "")) != "load":
+			_dm25_frame_selected_protected = true
+		else:
+			_dm25_frame_selected_other_load = true
 	if String(stage.get("purpose", "")) != "load" \
 	or int(stage.get("submit_index", -1)) != 0:
 		return
@@ -128,12 +154,25 @@ func first_snapshot(id: String, token: int, now_usec: int) -> void:
 				maxi(0, now_usec - int(s["first_selected"])))
 
 
-func effect_pending(id: String, token: int) -> void:
+func effect_pending(id: String, token: int,
+		missing_source_regions: Array = []) -> void:
 	var k := key(id, token)
 	if not _active.has(k):
 		return
 	_active[k]["pending_effect"] += 1
 	_inc("first_chunk_effect_pending")
+	if k == _dm25_focus_key:
+		_dm25_frame_effect_pending = true
+		for source_value in missing_source_regions:
+			if not source_value is Vector2i:
+				continue
+			var source: Vector2i = source_value
+			var scope := "region:%d,%d" % [source.x, source.y]
+			if not _dm25_missing_source_hits.has(scope) \
+			and _dm25_missing_source_hits.size() >= 128:
+				_inc("dm25_missing_scope_overflow")
+				continue
+			_dm25_missing_source_hits[scope] = int(_dm25_missing_source_hits.get(scope, 0)) + 1
 
 
 func first_dispatched(id: String, token: int, now_usec: int) -> void:
@@ -193,9 +232,37 @@ func finish(id: String, token: int, now_usec: int, reason: String) -> void:
 	_order.erase(k)
 
 
+func focal_frame_outcome(id: String, is_active: bool,
+		stage: Dictionary) -> void:
+	# Same post-dispatch sampling boundary as DM19; covers ONLY actual
+	# missing focal LOADs with submit_index==0. Counters are disjoint.
+	if is_active or stage.is_empty() \
+	or bool(stage.get("dm18_cache_ready", false)) \
+	or int(stage.get("submit_index", -1)) != 0 \
+	or String(stage.get("purpose", "")) != "load":
+		return
+	_inc("dm25_focal_missing_awaiting_first")
+	if _dm25_focus_key != key(id, int(stage.get("stage_token", -1))):
+		_inc("dm25_reason_untracked_or_changed_stage")
+	elif _dm25_frame_selected_focal:
+		_inc("dm25_reason_selected_effect_pending" if _dm25_frame_effect_pending \
+			else "dm25_reason_selected_without_pending_or_dispatch")
+	elif not _dm25_frame_budget:
+		_inc("dm25_reason_no_budget_at_dispatch_entry")
+	elif not _dm25_frame_worker:
+		_inc("dm25_reason_no_worker_at_dispatch_entry")
+	elif _dm25_frame_selected_protected:
+		_inc("dm25_reason_protected_stage_selected")
+	elif _dm25_frame_selected_other_load:
+		_inc("dm25_reason_other_load_selected")
+	else:
+		_inc("dm25_reason_no_selection_with_global_capacity")
+
+
 func reset_measurements_preserving_active() -> void:
 	_counts.clear()
 	_samples.clear()
+	_dm25_missing_source_hits.clear()
 
 
 func summary() -> Dictionary:
@@ -217,7 +284,8 @@ func summary() -> Dictionary:
 			"p95_ms": snappedf(float(int(values[percentile_index])) / 1000.0, 0.001)
 		}
 	return {"counts": _counts.duplicate(), "latency": stats,
-		"active_stages": _active.size()}
+		"active_stages": _active.size(),
+		"dm25_missing_source_hits": _dm25_missing_source_hits.duplicate()}
 
 
 func _inc(name: String) -> void:
