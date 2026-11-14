@@ -41,3 +41,29 @@ DM25 reports exactly the same trace cost in both A/A arms; it inherits the norma
 Primary readout is the warm-long distribution of **actual missing focal first-dispatch frames** by mutually exclusive reason, linked to same-region/token source-scope IDs. The control-vs-repeat A/A spread quantifies runner noise. Check missing-focus %, p99, frames>33ms, HIGH, source queue and snapshot pending. Important: DM25's `no_selection_with_global_capacity` is **not** certified source readiness, and `selected_without_pending_or_dispatch` requires targeted follow-up before interpretation. If a diagnostic class dominates, instrument that class's exact causal path and then design one independent treatment with equal overhead. Do not promote a scheduling policy or merge to main without replicated warm-long improvement, parity and GPU visual review.
 
 **Current result:** implementation pending GitHub Actions qualification.
+
+
+## Terminal DM25 result — run 43611787222 (PASS)
+
+The [corrected DM25 A/A workflow](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43611787222), commit \`3b2ea1d676f568982c77ea5391f4cadfadc9e993\`, completed exact, 10-trial smoke and 40-trial replicated A/A with no failures, identical instrumentation and no DM24 policy intervention. Artifact \`dm25-focal-validated-evidence\`, ID \`14122020809\`, holds per-run receipts. DM18 ON in all arms. No GPU visual qualification and no change to \`main\`.
+
+**Primary warm-long A/A, n=8 paired runs, repeat minus control:**
+
+| Metric | Control mean | Repeat mean | Paired difference [95% t CI] |
+|---|---:|---:|---:|
+| Missing focus | 23.7293% | 23.7241% | −0.0051 pp [−0.191, +0.181] |
+| Frame p99 | 17.9941 ms | 18.0560 ms | +0.0619 ms [−0.0845, +0.2082] |
+| HIGH completed | 578.0 | 578.75 | +0.75 [−3.04, +4.54] |
+| First-dispatch latency, successfully dispatched only | — | — | +19.24 ms [−31.52, +70.01] |
+
+The diagnostic observer's **exclusive bucket partition exactly reconciled to DM19's \`awaiting_first_dispatch\` count in every warm-long trial**. On average 533.625 missing first-dispatch frames in control and 533.125 in repeat were attributed to **selected focal first-chunk snapshot with effects pending**; the seven alternative buckets contributed **zero** in warm-long. Of all *missing focus* frames, first-dispatch pending accounts for ~93%; the 100% share applies only inside that first-dispatch subset, **not** all frame gaps.
+
+**All 16 warm-long receipts show the same unresolved source-scope identifier:** \`region:23,14\`, and no other source ID in their DM25 missing-source maps. DM22 logged 396 source queue events and 395 source publications in every trial, but it **does not establish whether this particular scope was queued, dispatched, cancelled, evicted, invalidated or not protected**; those are aggregate totals, not scope-specific evidence. DM22 critical published-source attribution is empty for most warm-long focal waits because 10 focal first-chunk waits/trial ended in cancellation, while only one was first-submitted while focal. The first chunk that never dispatched is absent from successful-dispatch latency summaries. Do not infer a failed projection worker or CPU saturation without scope-state evidence.
+
+Cold-forward first-dispatch gap attribution is also predominantly effects-pending (~97–98%); the remaining ~2–3% is unavailable worker capacity. Warm-forward after prewarm has zero first-dispatch missing-focus frames in both arms. A/A cold-forward missing-focus delta was −1.967 pp (95% t CI [−4.854, +0.920]) and frame p99 difference +0.801 ms (95% CI [−4.176, +5.778]), demonstrating material background variance in secondary cold measurements without an algorithm change.
+
+**Decision:** \`DM25_DIAGNOSTIC_QUALIFIED_SOURCE_STATE_UNRESOLVED\`. H2 is supported at the actual focal-frame boundary; H1 is not supported for warm-long. Keep DM18, keep DM24-F disabled. Do not promote or merge to \`main\`.
+
+### Follow-on diagnostic DM26 (single-source scope-state census)
+
+Observe \`region:23,14\` and every focal pending source at each first-chunk pending attempt: is it in the required 9×9 protected set, present in projection, valid for authority revision, in the urgent/normal queue (with actual position/age), generation in-flight, projection in-flight, projection-ready, cancelled, or absent from the queue? Record source scope lifecycle transitions and queue eviction/promotion **by actual scope ID**, not aggregate counters. Preserve the exact same observer in both A/A arms, with no scheduling or working-set changes. Prove whether a source is never admitted, repeatedly invalidated/cancelled, or simply delayed before considering any treatment. Specifically test the protected-scope invariant for the focal source at runtime and the opposite boundary case; keep all tests revision-gated and 16-chunk publication-authoritative.
