@@ -41,3 +41,18 @@ Script `scripts/perf/run-dm20-factorial.ps1`. Quatro condições por bloco **con
 5. Antes de promover, testes de paridade dinâmica de edits/undo, efeitos e revisões de objetos, colisões e GUI GPU.
 
 **Estado provisório:** implementação + contratos qualificados. Smoke e replicação ainda pendentes no momento da criação deste registro. Nenhuma alteração na `main`.
+
+## Smoke integrado — 16 execuções PASS
+
+No workflow [43535376318](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43535376318), job smoke PASS, SHA `4fb2bb038ca6995f6f28c9403133f1d76dc88a76`. Duas repetições por cenário; resultados apenas descritivos, não conclusão de inferência:
+
+| Cenário | Métrica | Controle | A | B | A+B |
+|---|---|---:|---:|---:|---:|
+| Cold straight 18m/s | Ausência do foco | 31,1805% | 35,903% | 35,000% | 31,5975% |
+| Cold straight 18m/s | Frame p99 | 25,0085ms | 18,056ms | 19,028ms | 20,848ms |
+| Warm straight 18m/s | Ausência do foco | 0% | 0% | 0% | 0% |
+| Warm straight 18m/s | Frame p99 | 21,228ms | 23,712ms | 26,710ms | 24,871ms |
+
+A: em cold, **106 tentativas de priming**, **52,5 snapshots reutilizados** por execução, **zero rejeições por revisão**; B: ~**462 overrides** de despacho por execução; A+B ambos são exercitados (40,5 snapshots e 480,5 overrides por execução). A e B não foram no-op, mas o ganho de cobertura não foi reproduzido no smoke cold. Em warm há efeito de piso: 0% de foco ausente em todos os braços, impossibilitando medir melhora por essa métrica num percurso de 12s.
+
+**Gate:** não promover com base em variação de p99 do smoke de 2 pares. Comparar os dados de 48 execuções em progresso, em especial percurso warm outback longo e intervalos pareados. Se não houver benefício e/ou picos piorarem, deixar ambas flags OFF por padrão.
