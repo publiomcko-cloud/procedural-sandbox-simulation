@@ -2216,6 +2216,12 @@ func _process_free_exploration(delta: float) -> void:
 		if _stream_bench_warmup_remaining > 0:
 			_stream_bench_warmup_remaining -= 1
 			if _stream_bench_warmup_remaining == 0:
+				if _dm22_probe != null:
+					_dm22_probe.reset_measurements()
+					_dm19_cold_profile = DM19ColdAttribution.new()
+					if terrain_effect_runtime != null \
+					and bool(terrain_effect_runtime.get("initialized")):
+						terrain_effect_runtime.reset_performance_metrics()
 				print("DM5_BENCH_WARMUP_COMPLETE: " + JSON.stringify({
 					"frames": _stream_bench_warmup_frames,
 					"focus": [focus_region_key.x, focus_region_key.y],
