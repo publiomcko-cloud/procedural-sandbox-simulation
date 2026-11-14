@@ -27,6 +27,8 @@ const DM16BenchmarkProbe := preload("res://scripts/diagnostics/dm16_benchmark_pr
 const DM19ColdAttribution := preload("res://scripts/diagnostics/dm19_cold_attribution.gd")
 const DM22ScopeLifecycleProbe := preload("res://scripts/diagnostics/dm22_scope_lifecycle_probe.gd")
 const DM23RegionLifecycleProbe := preload("res://scripts/diagnostics/dm23_region_lifecycle_probe.gd")
+const DM24StagePriority := preload("res://scripts/terrain/dm24_canonical_stage_priority.gd")
+const DM24StageFunnelProbe := preload("res://scripts/diagnostics/dm24_canonical_stage_funnel_probe.gd")
 const DM18CanonicalCache := preload("res://scripts/terrain/dm18_canonical_region_cache.gd")
 const DM12SnapshotBatch := preload("res://scripts/terrain/dm12_surface_snapshot_batch.gd")
 const EnvironmentVisualScript := preload("res://scripts/simulation/environment_visual_presentation.gd")
@@ -284,6 +286,9 @@ var _dm19_cold_profile: RefCounted
 # DM22 is ALWAYS enabled in both benchmark arms. No treatment-specific trace.
 var _dm22_probe: RefCounted
 var _dm23_stage_probe: RefCounted
+var _dm24_funnel: RefCounted
+var _dm24_stage_fair_enabled := false
+var _dm24_dispatch_sequence := 0
 var _dm23_previous_focus := Vector2i(2147483647, 2147483647)
 var _dm22_in_mesh_dispatch := false
 var _dm22_snapshot_context: Dictionary = {}
@@ -448,6 +453,9 @@ func _ready() -> void:
 		if OS.get_environment("SANDBOX_DM23_STAGE_TRACE") == "1":
 			_dm23_stage_probe = DM23RegionLifecycleProbe.new()
 			_dm22_probe.set_dm23_stage_probe(_dm23_stage_probe)
+			if OS.get_environment("SANDBOX_DM24_STAGE_TRACE") == "1":
+				_dm24_funnel = DM24StageFunnelProbe.new()
+				_dm24_stage_fair_enabled = OS.get_environment("SANDBOX_DM24_STAGE_FAIR") == "1"
 	if OS.get_environment("SANDBOX_DM19_COLD_DIAGNOSTIC") == "1" \
 	and OS.get_environment("SANDBOX_STREAM_BENCHMARK") == "1":
 		_dm19_cold_profile = DM19ColdAttribution.new()
@@ -2226,6 +2234,8 @@ func _process_free_exploration(delta: float) -> void:
 					_dm22_probe.reset_measurements()
 					if _dm23_stage_probe != null:
 						_dm23_stage_probe.reset_counters_preserving_active()
+					if _dm24_funnel != null:
+						_dm24_funnel.reset_measurements_preserving_active()
 					_dm19_cold_profile = DM19ColdAttribution.new()
 					if terrain_effect_runtime != null \
 					and bool(terrain_effect_runtime.get("initialized")):
@@ -2304,6 +2314,9 @@ func _process_free_exploration(delta: float) -> void:
 					"dm22_scope_trace_enabled": _dm22_probe != null,
 					"dm22_scope_trace": _dm22_probe.summary() if _dm22_probe != null else {},
 					"dm23_stage_trace_enabled": _dm23_stage_probe != null,
+					"dm24_stage_trace_enabled": _dm24_funnel != null,
+					"dm24_stage_fair_enabled": _dm24_stage_fair_enabled,
+					"dm24_stage_funnel": _dm24_funnel.summary() if _dm24_funnel != null else {},
 					"dm23_region_trace": _dm23_stage_probe.summary() if _dm23_stage_probe != null else {},
 					"dm23_fair_source_queue": terrain_effect_runtime.dm23_fair_metrics() if terrain_effect_runtime != null and bool(terrain_effect_runtime.get("initialized")) else {},
 					"dm19_cold": _dm19_cold_profile.summary() if _dm19_cold_profile != null else {},
@@ -2531,6 +2544,11 @@ func _update_focus_key() -> void:
 			_dm23_stage_probe.focus_enter(
 				focus_id, int(focus_stage.get("stage_token", -1)), Time.get_ticks_usec()
 			)
+			if _dm24_funnel != null:
+				_dm24_funnel.focus_enter(
+					focus_id, int(focus_stage.get("stage_token", -1)),
+					Time.get_ticks_usec()
+				)
 			_dm23_previous_focus = focus_region_key
 		world_state = _state_for_region(focus_region_key)
 		if (
@@ -2668,6 +2686,11 @@ func _reconcile_region_window(force: bool = false) -> void:
 				if _dm23_stage_probe != null and String(stage.get("purpose", "")) == "load":
 					_dm23_stage_probe.cancelled(
 						id, int(stage.get("stage_token", -1)), "left_window"
+					)
+				if _dm24_funnel != null and String(stage.get("purpose", "")) == "load":
+					_dm24_funnel.finish(
+						id, int(stage.get("stage_token", -1)),
+						Time.get_ticks_usec(), "left_window"
 					)
 				if _dm19_cold_profile != null:
 					_dm19_cold_profile.cancel(id, "left_window")
@@ -2897,6 +2920,13 @@ func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinate
 				"cache_hits": _dm5_cache_hits,
 				"superseded_by_low": false,
 			})
+	if _dm24_funnel != null and loading_regions.has(id):
+		var previous_stage: Dictionary = loading_regions[id]
+		if String(previous_stage.get("purpose", "")) == "load":
+			_dm24_funnel.finish(
+				id, int(previous_stage.get("stage_token", -1)),
+				Time.get_ticks_usec(), "replaced"
+			)
 	_discard_progressive_chunks(id, "stage_replaced")
 	_clear_coarse_preview(id)
 	var state: RefCounted
@@ -2984,6 +3014,10 @@ func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinate
 			id, token, Time.get_ticks_usec(), region_key == focus_region_key,
 			bool(loading_regions[id].get("dm18_cache_ready", false))
 		)
+		if _dm24_funnel != null and not bool(loading_regions[id].get("dm18_cache_ready", false)):
+			_dm24_funnel.begin(
+				id, token, Time.get_ticks_usec(), region_key == focus_region_key
+			)
 	if region_key == focus_region_key:
 		world_state = state
 	if _perf_trace_enabled:
@@ -4090,6 +4124,12 @@ func _process_completed_mesh_jobs() -> void:
 
 func _dispatch_mesh_jobs() -> void:
 	_dm22_in_mesh_dispatch = _dm22_probe != null
+	if _dm24_funnel != null:
+		_dm24_funnel.frame(
+			loading_regions, focus_region_key,
+			int(_stream_budget_state.get("dispatch_limit", 1)),
+			_mesh_dispatches_this_frame, _mesh_jobs.size(), _mesh_job_limit
+		)
 	var dispatch_started_usec := Time.get_ticks_usec()
 	# A blocked LOAD stage may be skipped for this invocation only. The
 	# selector never advances its chunk index, so exact order within each
@@ -4346,6 +4386,11 @@ func _dispatch_mesh_jobs() -> void:
 			_dm23_stage_probe.first_submitted(
 				id, int(stage["stage_token"]), Time.get_ticks_usec()
 			)
+		if _dm24_funnel != null and int(stage.get("submit_index", -1)) == 0 \
+		and String(stage.get("purpose", "")) == "load":
+			_dm24_funnel.first_dispatched(
+				id, int(stage["stage_token"]), Time.get_ticks_usec()
+			)
 		stage["submit_index"] = int(stage["submit_index"]) + 1
 		stage["pending_count"] = int(stage["pending_count"]) + 1
 		loading_regions[id] = stage
@@ -4418,6 +4463,13 @@ func _prepare_terrain_effect_snapshot(
 			prepared.get("missing_source_regions", []),
 			bool(prepared.get("pending", false))
 		)
+	if _dm24_funnel != null and _dm22_in_mesh_dispatch \
+	and bool(_dm22_snapshot_context.get("first_load", false)):
+		var selected_id := String(_dm22_snapshot_context.get("id", ""))
+		var stage_token := int(_dm22_snapshot_context.get("token", -1))
+		_dm24_funnel.first_snapshot(selected_id, stage_token, Time.get_ticks_usec())
+		if bool(prepared.get("pending", false)):
+			_dm24_funnel.effect_pending(selected_id, stage_token)
 	if prepared.get("ok", false):
 		_terrain_effect_status = "Terrain-object effects active (%d frame(s), %d resident scope(s))" % [
 			int(prepared.get("effect_count", 0)),
@@ -4530,6 +4582,10 @@ func _complete_region_stage(id: String) -> void:
 		if _dm23_stage_probe != null and String(stage["purpose"]) == "load":
 			_dm23_stage_probe.published(
 				id, int(stage["stage_token"]), Time.get_ticks_usec()
+			)
+		if _dm24_funnel != null and String(stage["purpose"]) == "load":
+			_dm24_funnel.finish(
+				id, int(stage["stage_token"]), Time.get_ticks_usec(), "published"
 			)
 		if _perf_trace_enabled:
 			PerformanceTrace.emit("terrain_region_load_complete", {
@@ -5971,6 +6027,11 @@ func _supersede_region_stage(id: String) -> void:
 		_dm23_stage_probe.cancelled(
 			id, int(stale_stage.get("stage_token", -1)), "superseded"
 		)
+	if _dm24_funnel != null and String(stale_stage.get("purpose", "")) == "load":
+		_dm24_funnel.finish(
+			id, int(stale_stage.get("stage_token", -1)),
+			Time.get_ticks_usec(), "superseded"
+		)
 	if _dm19_cold_profile != null:
 		_dm19_cold_profile.cancel(id, "superseded")
 	loading_regions.erase(id)
@@ -6027,6 +6088,11 @@ func _fail_region_stage(id: String, message: String) -> void:
 	if _dm23_stage_probe != null and String(failed_stage.get("purpose", "")) == "load":
 		_dm23_stage_probe.cancelled(
 			id, int(failed_stage.get("stage_token", -1)), "failed"
+		)
+	if _dm24_funnel != null and String(failed_stage.get("purpose", "")) == "load":
+		_dm24_funnel.finish(
+			id, int(failed_stage.get("stage_token", -1)),
+			Time.get_ticks_usec(), "failed"
 		)
 	if _dm19_cold_profile != null:
 		_dm19_cold_profile.cancel(id, "failed")
