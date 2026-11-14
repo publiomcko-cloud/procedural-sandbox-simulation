@@ -15,6 +15,8 @@ static func choose(stages: Dictionary, excluded: Dictionary,
 		return existing
 	var best := existing
 	var best_rank := _rank(initial, focus, player_world, String(existing["id"]))
+	if bool(initial.get("dm9_speculative", false)):
+		best_rank = [2147483647, INF, "~"]
 	for id_value in stages.keys():
 		var id := String(id_value)
 		if excluded.has(id):
