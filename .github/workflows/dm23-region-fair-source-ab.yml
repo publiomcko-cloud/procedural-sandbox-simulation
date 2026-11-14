@@ -2,7 +2,7 @@ name: DM23 neighbor to focus source fairness A/B - equal instrumentation cost
 on:
   push:
     branches:
-      - exp/dm22-effect-scope-critical-path
+      - exp/dm23-region-lifecycle-fair-source-queue
   workflow_dispatch:
 concurrency:
   group: dm23-fair-control
