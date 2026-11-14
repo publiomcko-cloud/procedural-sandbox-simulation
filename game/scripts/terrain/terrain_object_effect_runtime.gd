@@ -55,6 +55,12 @@ var _projection_build_cache_order: Array[String] = []
 var _projection_source_cache: Dictionary = {}
 var _projection_source_cache_order: Array[String] = []
 var _prefetch_error := ""
+# DM21 opt-in: generation is a wake notification, not a second authority.
+var _dm21_notify_enabled := false
+var _dm21_ready_generation := 0
+var _dm21_publishes := 0
+var _dm21_invalidations := 0
+var _dm21_readiness_queries := 0
 var _perf_trace_enabled := false
 # DM14 hotspot diagnostics, separate from the normal performance summary.
 var _dm14_effect_trace := false
@@ -115,6 +121,11 @@ func initialize(
 ) -> Dictionary:
 	initialized = false
 	initialization_error = ""
+	_dm21_notify_enabled = OS.get_environment("SANDBOX_DM21_EFFECT_GATE") == "1"
+	_dm21_ready_generation = 0
+	_dm21_publishes = 0
+	_dm21_invalidations = 0
+	_dm21_readiness_queries = 0
 	_perf_trace_enabled = PerformanceTrace.is_enabled()
 	_dm14_effect_trace = _perf_trace_enabled and OS.get_environment(
 		"SANDBOX_DM14_EFFECT_TRACE"
@@ -568,6 +579,9 @@ func _publish_prebuilt_projection_record(
 	) + 1
 	_invalidated_scope_ids.erase(scope_id)
 	_pre_invalidation_frames.erase(scope_id)
+	if _dm21_notify_enabled:
+		_dm21_ready_generation += 1
+		_dm21_publishes += 1
 	_performance["prefetch_scope_count"] = int(
 		_performance["prefetch_scope_count"]
 	) + 1
@@ -921,6 +935,28 @@ func process_route_cleanup_step(
 		return {"ok": false, "reason": "terrain_effect_runtime_not_initialized"}
 	return projection.process_route_cleanup_step(max_chunk_keys, budget_usec)
 
+func dm21_readiness_generation() -> int:
+	return _dm21_ready_generation
+
+
+## Poll only after a scope completion/invalidation event or watchdog expiry.
+## All source-generation and projection single-flight ownership stays here.
+func dm21_missing_regions_ready(regions: Array) -> bool:
+	if not initialized or projection == null:
+		return false
+	_dm21_readiness_queries += 1
+	if regions.is_empty():
+		return false
+	for value in regions:
+		if not value is Vector2i:
+			return false
+		var region: Vector2i = value
+		var id := Contract.scope_id_for_region(region)
+		if _invalidated_scope_ids.has(id) or not projection.has_scope(region):
+			return false
+	return true
+
+
 func get_prefetch_pending_count() -> int:
 	return _prefetch_queue.size() \
 		+ _prefetch_generation_jobs.size() \
@@ -1004,6 +1040,9 @@ func _reconcile_prebuilt_source_region(
 	) + 1
 	_invalidated_scope_ids.erase(scope_id)
 	_pre_invalidation_frames.erase(scope_id)
+	if _dm21_notify_enabled:
+		_dm21_ready_generation += 1
+		_dm21_publishes += 1
 	return reconciled
 
 
@@ -1164,6 +1203,7 @@ func prepare_targets_snapshot(
 			"pending": true,
 			"reason": "terrain_effect_runtime_prefetch_pending",
 			"missing_scope_count": missing_regions.size(),
+			"missing_source_regions": missing_regions.duplicate(),
 			"prefetch_pending_count": _prefetch_queue.size(),
 		}
 	for source_region in missing_regions:
@@ -1275,6 +1315,9 @@ func invalidate_source_region(source_region: Vector2i) -> void:
 			scope.get("local_frames", {}) as Dictionary
 		).duplicate(true) if not scope.is_empty() else {}
 	_invalidated_scope_ids[scope_id] = true
+	if _dm21_notify_enabled:
+		_dm21_ready_generation += 1
+		_dm21_invalidations += 1
 
 
 func refresh_invalidated_source_region(
@@ -1312,6 +1355,9 @@ func refresh_invalidated_source_region(
 	var targets := _changed_frame_targets(old_frames, new_frames)
 	_invalidated_scope_ids.erase(scope_id)
 	_pre_invalidation_frames.erase(scope_id)
+	if _dm21_notify_enabled:
+		_dm21_ready_generation += 1
+		_dm21_publishes += 1
 	return {
 		"ok": true,
 		"targets": targets,
@@ -1572,6 +1618,10 @@ func get_performance_snapshot() -> Dictionary:
 	result["projection_source_cache_entry_count"] = _projection_source_cache.size()
 	result["projection_source_cache_capacity"] = MAX_PROJECTION_SOURCE_CACHE_ENTRIES
 	result["prefetch_error"] = _prefetch_error
+	result["dm21_ready_generation"] = _dm21_ready_generation
+	result["dm21_publishes"] = _dm21_publishes
+	result["dm21_invalidations"] = _dm21_invalidations
+	result["dm21_readiness_queries"] = _dm21_readiness_queries
 	result["projection"] = projection.get_performance_snapshot() 		if projection != null else {}
 	return result
 
