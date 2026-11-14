@@ -108,8 +108,12 @@ try {
         $d23=$s.dm23_region_trace
         $fair=$s.dm23_fair_source_queue
         $stage=$s.dm24_stage_funnel
-        if ([int]$stage.counts.instrumented_frames -ne $frames){
-            throw "DM24_STAGE_FRAME_ACCOUNTING $trial frames=$frames recorded=$($stage.counts.instrumented_frames)"
+        # Warm-up counters reset during pre-stream motion, before the
+        # current frame reaches the canonical dispatcher. Thus the new
+        # per-dispatch probe counts one boundary frame in both A/B arms.
+        $expectedStageFrames=$frames+$(if($warm -gt 0){1}else{0})
+        if ([int]$stage.counts.instrumented_frames -ne $expectedStageFrames){
+            throw "DM24_STAGE_FRAME_ACCOUNTING $trial expected=$expectedStageFrames recorded=$($stage.counts.instrumented_frames)"
         }
         if([int]$d23.counts.load_stages_started -lt 1 -or
             [int]$d.counts.scope_publications -lt 1 -or
