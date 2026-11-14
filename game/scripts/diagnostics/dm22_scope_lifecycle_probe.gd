@@ -14,7 +14,6 @@ var _focus: Dictionary = {}
 var _focus_order: Array[String] = []
 var _samples: Dictionary = {}
 var _counts: Dictionary = {}
-var _last_published: Dictionary = {}
 var _critical_scopes: Dictionary = {}
 
 
@@ -109,12 +108,10 @@ func published(id: String, now: int, publish_usec: int) -> void:
 		if proj_finish > 0:
 			_measure("projection_finish_to_publish_ms", maxi(0, now - proj_finish))
 		_measure("scope_publish_cpu_ms", publish_usec)
-		_measure("scope_queue_depth_at_entry", int(d.get("queue_depth", 0)) * 1000)
 		_scopes.erase(id)
 		_scope_order.erase(id)
 	else:
 		_increment("publication_without_scope_trace")
-	_last_published[id] = now
 	for key_value in _focus.keys():
 		var key := String(key_value)
 		var req: Dictionary = _focus[key]
@@ -165,9 +162,10 @@ func focus_prepare(key: String, stage_token: int, now: int,
 	for region_value in missing:
 		if region_value is Vector2i:
 			var region: Vector2i = region_value
-			var scope_id := "%d,%d" % [region.x, region.y]
-			if not (d["unresolved"] as Dictionary).has(scope_id):
-				(d["unresolved"] as Dictionary)[scope_id] = true
+			var scope_id := "region:%d,%d" % [region.x, region.y]
+			var unresolved: Dictionary = d["unresolved"]
+			if not unresolved.has(scope_id):
+				unresolved[scope_id] = true
 	if not was_pending:
 		_increment("focus_first_chunk_ready_calls")
 
