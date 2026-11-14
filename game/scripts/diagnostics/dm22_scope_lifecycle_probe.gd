@@ -234,6 +234,17 @@ func focus_cancel(key: String, stage_token: int) -> void:
 		_focus_order.erase(identity)
 
 
+## Clear measurement counters at the end of stationary prewarm, but keep
+## in-flight scopes and their enqueue timestamps (real critical-path age).
+func reset_measurements() -> void:
+	_samples.clear()
+	_counts.clear()
+	_critical_scopes.clear()
+	_critical_phase_counts.clear()
+	_focus.clear()
+	_focus_order.clear()
+
+
 func summary() -> Dictionary:
 	var stats: Dictionary = {}
 	for name_value in _samples:
