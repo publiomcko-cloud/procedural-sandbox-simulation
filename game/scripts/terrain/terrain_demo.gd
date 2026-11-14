@@ -4191,8 +4191,7 @@ func _dispatch_mesh_jobs() -> void:
 				MESH_SNAPSHOT_FRAME_BUDGET_USEC,
 				_last_frame_ms < StreamBudgetPolicy.SPIKE_FRAME_MS
 				and _last_process_work_ms < StreamBudgetPolicy.SPIKE_PROCESS_MS
-				and String(_stream_budget_state.get("reason", "baseline"))
-					not in ["frame_spike", "cooldown"]
+				and String(_stream_budget_state.get("reason", "baseline")) not in ["frame_spike", "cooldown"]
 			):
 				skipped_ids[id] = true
 				_stream_window_skipped_load_stages += 1
