@@ -1,7 +1,7 @@
 param(
   [ValidateRange(1,12)][int]$ColdPairs=4,
   [ValidateRange(1,12)][int]$WarmPairs=4,
-  [ValidateRange(1,12)][int]$LongPairs=2,
+  [ValidateRange(0,12)][int]$LongPairs=2,
   [ValidateRange(0,12)][int]$IdlePairs=2,
   [string]$GodotBin='C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe',
   [string]$EvidenceDir=$(if ($env:RUNNER_TEMP) { Join-Path $env:RUNNER_TEMP 'dm22-scope' } else { Join-Path $env:TEMP 'dm22-scope' })
