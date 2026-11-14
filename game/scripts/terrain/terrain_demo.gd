@@ -25,6 +25,7 @@ const EnvironmentHydrologyDomainScript := preload("res://scripts/simulation/envi
 const EnvironmentSurfaceCacheJobScript := preload("res://scripts/simulation/environment_surface_cache_job.gd")
 const DM16BenchmarkProbe := preload("res://scripts/diagnostics/dm16_benchmark_probe.gd")
 const DM19ColdAttribution := preload("res://scripts/diagnostics/dm19_cold_attribution.gd")
+const DM20FocusPriority := preload("res://scripts/terrain/dm20_canonical_focus_priority.gd")
 const DM18CanonicalCache := preload("res://scripts/terrain/dm18_canonical_region_cache.gd")
 const DM12SnapshotBatch := preload("res://scripts/terrain/dm12_surface_snapshot_batch.gd")
 const EnvironmentVisualScript := preload("res://scripts/simulation/environment_visual_presentation.gd")
@@ -279,6 +280,16 @@ var _dm18_job_times: Dictionary = {
 }
 # DM19: profiling only, allocated exclusively for benchmark when explicitly enabled.
 var _dm19_cold_profile: RefCounted
+# DM20 independent opt-in interventions, both OFF unless explicitly requested.
+var _dm20_snapshot_primer_enabled := false
+var _dm20_focus_first_enabled := false
+var _dm20_prime_attempts := 0
+var _dm20_prime_pending := 0
+var _dm20_prime_ready := 0
+var _dm20_prime_hits := 0
+var _dm20_prime_rejected := 0
+var _dm20_prime_total_usec := 0
+var _dm20_priority_overrides := 0
 
 var _dm12_surface_slice := false
 var _dm14_lazy_route_enabled := false
@@ -434,6 +445,8 @@ var _last_edit_rejection := ""
 
 func _ready() -> void:
 	_perf_trace_enabled = PerformanceTrace.is_enabled()
+	_dm20_snapshot_primer_enabled = OS.get_environment("SANDBOX_DM20_SNAPSHOT_PRIMER") == "1"
+	_dm20_focus_first_enabled = OS.get_environment("SANDBOX_DM20_FOCUS_FIRST") == "1"
 	if OS.get_environment("SANDBOX_DM19_COLD_DIAGNOSTIC") == "1" \
 	and OS.get_environment("SANDBOX_STREAM_BENCHMARK") == "1":
 		_dm19_cold_profile = DM19ColdAttribution.new()
@@ -1442,6 +1455,9 @@ func _process(delta: float) -> void:
 	stream_preflight_started_usec = Time.get_ticks_usec()
 	_update_lod_selection()
 	_stream_stage_measure("lod_selection", stream_preflight_started_usec)
+	# DM20 priming is before the effect prefetch worker's one-step tick,
+	# so a blocked canonical stage can request its sources one frame sooner.
+	_dm20_prime_next_snapshot()
 	if _checkpoint_task_id >= 0 and (global_rebuild_pending or not loading_regions.is_empty()):
 		_checkpoint_overlap_observed = true
 	_process_async_checkpoint()
@@ -2275,6 +2291,17 @@ func _process_free_exploration(delta: float) -> void:
 					"dm18_cache_enabled": _dm18_cache_enabled,
 					"dm18_diagnostic_enabled": _dm18_diagnostic_enabled,
 					"dm19_cold_diagnostic_enabled": _dm19_cold_profile != null,
+					"dm20_snapshot_primer_enabled": _dm20_snapshot_primer_enabled,
+					"dm20_focus_first_enabled": _dm20_focus_first_enabled,
+					"dm20": {
+						"prime_attempts": _dm20_prime_attempts,
+						"prime_pending": _dm20_prime_pending,
+						"prime_ready": _dm20_prime_ready,
+						"prime_hits": _dm20_prime_hits,
+						"prime_rejected": _dm20_prime_rejected,
+						"prime_total_ms": float(_dm20_prime_total_usec) / 1000.0,
+						"priority_overrides": _dm20_priority_overrides
+					},
 					"dm19_cold": _dm19_cold_profile.summary() if _dm19_cold_profile != null else {},
 					"dm19_effect_runtime": terrain_effect_runtime.get_performance_snapshot() if _dm19_cold_profile != null and terrain_effect_runtime != null and bool(terrain_effect_runtime.get("initialized")) else {},
 					"dm18_cache": _dm18_cache.stats() if _dm18_cache_enabled else {},
@@ -4204,13 +4231,21 @@ func _dispatch_mesh_jobs() -> void:
 			job_kind = "shared_boundary_z"
 			shared_side = "low" if coordinate.y == ChunkGrid.CHUNK_COUNT_Z - 1 else "high"
 		else:
-			var chunk_snapshot: Dictionary = state.brush_edits.get_meshing_snapshot_for_chunk(
-				stage["region_key"], coordinate
+			var primed_chunk: Dictionary = _dm20_consume_primed_snapshot(
+				stage, state, coordinate
 			)
-			var prepared_chunk := _prepare_terrain_effect_snapshot(
-				chunk_snapshot,
-				[{"region_key": stage["region_key"], "chunk_coordinate": coordinate}]
-			)
+			var chunk_snapshot: Dictionary = {}
+			var prepared_chunk: Dictionary = {}
+			if not primed_chunk.is_empty():
+				prepared_chunk = {"ok": true, "snapshot": primed_chunk}
+			else:
+				chunk_snapshot = state.brush_edits.get_meshing_snapshot_for_chunk(
+					stage["region_key"], coordinate
+				)
+				prepared_chunk = _prepare_terrain_effect_snapshot(
+					chunk_snapshot,
+					[{"region_key": stage["region_key"], "chunk_coordinate": coordinate}]
+				)
 			if not prepared_chunk.get("ok", false):
 				if _terrain_effect_snapshot_pending(prepared_chunk):
 					_stream_dispatch_blocked("effect_pending_chunk")
@@ -4273,6 +4308,7 @@ func _dispatch_mesh_jobs() -> void:
 		if task_id < 0:
 			_fail_region_stage(id, "Worker pool rejected a mesh job; previous visible meshes retained")
 			continue
+		stage.erase("dm20_primed")
 		stage["submit_index"] = int(stage["submit_index"]) + 1
 		stage["pending_count"] = int(stage["pending_count"]) + 1
 		loading_regions[id] = stage
@@ -4315,6 +4351,92 @@ func _dispatch_mesh_jobs() -> void:
 		_stream_dispatch_blocked("worker_capacity")
 
 
+## DM20-A prepares exactly ONE complete next normal-chunk snapshot ahead of
+## canonical dispatch. No expansion of effect residency/protected halo or jobs.
+## Shared-boundary/corner chunks deliberately remain on their original path.
+## All cached data stay within the owning ephemeral stage, never in authority.
+func _dm20_prime_next_snapshot() -> void:
+	if not _dm20_snapshot_primer_enabled or global_rebuild_pending \
+	or not _edit_transaction.is_empty() or _last_frame_ms >= 20.0 \
+	or _last_process_work_ms >= 14.0 \
+	or String(_stream_budget_state.get("reason", "")) in ["frame_spike", "cooldown"]:
+		return
+	if terrain_effect_runtime == null or not bool(terrain_effect_runtime.get("initialized")):
+		return
+	# Choose one of the currently requested normal LOAD stages; no
+	# speculative/high-only targets or regions outside the canonical window.
+	var request: Dictionary = _next_mesh_job_request()
+	if request.is_empty():
+		return
+	var id: String = request["id"]
+	if not loading_regions.has(id):
+		return
+	var stage: Dictionary = loading_regions[id]
+	if String(stage.get("purpose", "")) != "load" \
+	or bool(stage.get("dm9_speculative", false)) \
+	or bool(stage.get("dm18_cache_ready", false)) \
+	or stage.has("dm20_primed"):
+		return
+	var coordinate: Vector2i = request["coordinate"]
+	if _uses_shared_corner(coordinate) \
+	or _uses_shared_x_boundary(coordinate) or _uses_shared_z_boundary(coordinate):
+		return
+	var state: RefCounted = stage["world_state"]
+	if state == null or state.brush_edits == null \
+	or int(state.brush_edits.revision) != int(stage["edit_revision"]) \
+	or int(object_stream.get_command_world_revision()) \
+		!= int(stage["terrain_effect_authority_revision"]):
+		return
+	var started := Time.get_ticks_usec()
+	var base: Dictionary = state.brush_edits.get_meshing_snapshot_for_chunk(
+		stage["region_key"], coordinate
+	)
+	var prepared := _prepare_terrain_effect_snapshot(
+		base, [{"region_key": stage["region_key"], "chunk_coordinate": coordinate}]
+	)
+	_dm20_prime_attempts += 1
+	_dm20_prime_total_usec += Time.get_ticks_usec() - started
+	if not bool(prepared.get("ok", false)):
+		if bool(prepared.get("pending", false)):
+			_dm20_prime_pending += 1
+		return
+	stage["dm20_primed"] = {
+		"snapshot": prepared["snapshot"],
+		"coordinate": coordinate,
+		"token": int(stage["stage_token"]),
+		"brush_revision": int(stage["edit_revision"]),
+		"brush_scope_id": int(state.brush_edits.get_instance_id()),
+		"effect_revision": int(stage["terrain_effect_authority_revision"])
+	}
+	loading_regions[id] = stage
+	_dm20_prime_ready += 1
+
+
+func _dm20_consume_primed_snapshot(stage: Dictionary,
+		state: RefCounted, coordinate: Vector2i) -> Dictionary:
+	if not _dm20_snapshot_primer_enabled:
+		return {}
+	var primed: Dictionary = stage.get("dm20_primed", {})
+	if primed.is_empty():
+		return {}
+	if primed.get("coordinate") != coordinate \
+	or int(primed.get("token", -1)) != int(stage["stage_token"]) \
+	or int(primed.get("brush_revision", -1)) != int(state.brush_edits.revision) \
+	or int(primed.get("brush_scope_id", -1)) != int(state.brush_edits.get_instance_id()) \
+	or int(primed.get("effect_revision", -1)) \
+		!= int(object_stream.get_command_world_revision()):
+		_dm20_prime_rejected += 1
+		return {}
+	var snapshot: Dictionary = primed.get("snapshot", {})
+	if snapshot.is_empty() \
+	or int(snapshot.get("terrain_effect_authority_revision", -1)) \
+		!= int(stage["terrain_effect_authority_revision"]):
+		_dm20_prime_rejected += 1
+		return {}
+	_dm20_prime_hits += 1
+	return snapshot
+
+
 func _prepare_terrain_effect_snapshot(
 	base_snapshot: Dictionary,
 	targets: Array
@@ -4348,6 +4470,16 @@ func _terrain_effect_snapshot_pending(result: Dictionary) -> bool:
 
 
 func _next_mesh_job_request(excluded: Dictionary = {}) -> Dictionary:
+	if _dm20_focus_first_enabled:
+		var focus_first := DM20FocusPriority.choose(
+			loading_regions, excluded, focus_region_key, camera.global_position
+		)
+		var unmodified := StreamDispatchSelector.next(
+			loading_regions, excluded, focus_region_key
+		)
+		if String(focus_first.get("id", "")) != String(unmodified.get("id", "")):
+			_dm20_priority_overrides += 1
+		return focus_first
 	var selected := StreamDispatchSelector.next(loading_regions, excluded, focus_region_key)
 	if not _dm3_enabled() or selected.is_empty():
 		return selected
