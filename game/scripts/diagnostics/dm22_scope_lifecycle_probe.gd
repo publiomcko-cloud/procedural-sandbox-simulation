@@ -18,6 +18,11 @@ var _critical_scopes: Dictionary = {}
 var _recent_published: Dictionary = {}
 var _published_order: Array[String] = []
 var _critical_phase_counts: Dictionary = {}
+var _dm23_stage_probe: RefCounted
+
+
+func set_dm23_stage_probe(probe: RefCounted) -> void:
+	_dm23_stage_probe = probe
 
 
 func queued(id: String, now: int, queue_depth: int, urgent: bool) -> void:
@@ -96,6 +101,7 @@ func projection_completed(id: String, now: int, queue_usec: int, run_usec: int) 
 
 
 func published(id: String, now: int, publish_usec: int) -> void:
+	var published_phases: Dictionary = {}
 	var d: Dictionary = _scopes.get(id, {})
 	if not d.is_empty():
 		var enqueued := int(d.get("queued", now))
@@ -118,6 +124,7 @@ func published(id: String, now: int, publish_usec: int) -> void:
 			"projection": int(d.get("projection_worker_usec", 0)),
 			"projection_publish": publish_usec
 		}
+		published_phases = phases
 		_recent_published[id] = {
 			"total_usec": maxi(0, now - enqueued),
 			"phases": phases
@@ -130,6 +137,8 @@ func published(id: String, now: int, publish_usec: int) -> void:
 		_scope_order.erase(id)
 	else:
 		_increment("publication_without_scope_trace")
+	if _dm23_stage_probe != null:
+		_dm23_stage_probe.source_published(id, now, published_phases)
 	for key_value in _focus.keys():
 		var key := String(key_value)
 		var req: Dictionary = _focus[key]
