@@ -36,3 +36,32 @@ Script `scripts/perf/run-dm23-fair-queue-ab.ps1`, alternância A/B/BA de pares c
 Promover **somente** com ganho consistente, intervalos de confiança que sustentem o efeito desejado nos percursos relevantes, ausência de regressão relevante de tail/HIGH e paridade de edição/efeitos/objetos/DM18. Caso a justiça temporal reduza os gargalos de fila mas não reduza a ausência canônica, manter OFF e investigar o custo de processamento/ordem da última projeção. A/B não pode virar um experimento ON-vs-OFF de telemetria.
 
 **Estado inicial:** código e testes exatos aprovados no runner Windows; benchmark smoke em execução. A `main` não foi alterada.
+
+
+## Smoke concluído — 8 execuções A/B (PASS)
+
+[GitHub Actions run 43595190616](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43595190616), commit `edbf2f88fe1267161fcfda3e5356088ed46b7417`, job `exact` PASS, `smoke` PASS. Contratos da DM23 e regressões DM22/DM18/DM19, geometria e fonte de efeitos PASS. São 2 pares frios, 1 warm-forward e 1 warm-long; n é insuficiente para qualquer promoção.
+
+| Cenário | Indicador | Controle | Fair |
+|---|---|---:|---:|
+| Cold-forward | Ausência canônica | 38,889% | 38,889% |
+| Cold-forward | p99 frame | 20,732ms | 18,056ms |
+| Cold-forward | Tempo médio source em fila | 886,107ms | 850,943ms |
+| Cold-forward | Repriorizações urgentes/execução | 1.472 | **287,5** |
+| Cold-forward | Reordenações bloqueadas pelo cooldown/execução | 0 | **1.939** |
+| Cold-forward | Despachos envelhecidos aplicados/execução | 0 | **12** |
+| Warm-forward | Ausência canônica | 0% | 0% |
+| Warm-forward | Reordenações bloqueadas | 0 | 0 |
+| Warm-long | Ausência canônica | 23,625% | 24,583% |
+| Warm-long | Reordenações bloqueadas e despachos envelhecidos | 0 | 0 |
+| Warm-long | Hits DM18 | 51 | 50 |
+
+Os dois pares cold diferiram em **+9,305 p.p.** e **−9,306 p.p.** (fair−controle), cancelando-se em média; não atribuir o p99 menor à intervenção sem replicação. A política realmente atuou na fase fria, mas **não se ativou no warm-long**: fontes já esperavam ~111ms na fila, abaixo do limiar de 700ms, e nenhuma fonte exigiu repetida repriorização urgente. Portanto, não é plausível usar esse tratamento como solução do problema warm-long sem mudar o desenho do algoritmo; a replicação deve confirmar.
+
+### Nova capacidade de acompanhamento vizinho → foco
+
+No único par warm-long, ambos os braços iniciaram **132 LOAD stages** como vizinhos. O controle observou 13 promoções vizinho→foco; **11 dessas 13 regiões ainda não tinham primeiro chunk despachado ao entrar no foco**. O braço fair também observou **11 de 14** nessa condição. Nos estágios cujo primeiro chunk chegou a ser submetido, o tempo médio entre a primeira tentativa de snapshot e despacho foi apenas **0,075ms (controle)** e **0,082ms (fair)**. Já o intervalo criação→primeiro chunk foi aproximadamente **559ms** e **614ms**; vários estágios foram cancelados antes de emitir o primeiro chunk (30 no controle, 30 no fair).
+
+**Interpretação provisória:** a DM22 não conseguia classificar dependências warm-long porque o estágio é iniciado como vizinho; DM23 recuperou a trajetória e apontou uma espera longa **antes mesmo da primeira tentativa** de preparação de efeitos. O gargalo sustentado pode estar na elegibilidade/prioridade do dispatcher canônico ou na competição de etapas, não necessariamente no worker de projeções. A emissão de `prepare_targets_snapshot` para o primeiro chunk é praticamente imediata nos poucos estágios efetivamente submetidos. Isso ainda exige replicação e rastreamento de todos os 16 chunks para diagnosticar publicação completa.
+
+A `main` permanece sem alterações. Não promover policy DM23-F antes dos resultados replicados, da análise pareada e do teste visual GPU.
