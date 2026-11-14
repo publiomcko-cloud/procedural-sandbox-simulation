@@ -1,0 +1,155 @@
+name: DM24 canonical stage funnel and bounded first chunk fairness A/B - equal trace
+on:
+  push:
+    branches:
+      - exp/dm24-canonical-stage-funnel-fairness
+  workflow_dispatch:
+concurrency:
+  group: dm24-stage-control
+  cancel-in-progress: true
+permissions:
+  contents: read
+
+jobs:
+  exact:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 25
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: PowerShell 5.1 syntax and Godot 4.7.2 parser
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          $p = (Resolve-Path .\scripts\perf\run-dm24-stage-queue-ab.ps1).Path
+          $tokens=$null
+          $errors=$null
+          [void][System.Management.Automation.Language.Parser]::ParseFile($p,[ref]$tokens,[ref]$errors)
+          if($errors.Count -gt 0){ Write-Host ($errors | Out-String); throw 'DM24_POWERSHELL_PARSE_FAIL' }
+          & $env:GODOT_BIN --headless --editor --path .\game --import
+          if($LASTEXITCODE -ne 0){throw 'DM24_IMPORT_FAIL'}
+          foreach($file in @(
+            'res://scripts/diagnostics/dm22_scope_lifecycle_probe.gd',
+            'res://scripts/diagnostics/dm23_region_lifecycle_probe.gd',
+            'res://scripts/terrain/dm23_source_fair_queue_policy.gd',
+            'res://scripts/diagnostics/dm24_canonical_stage_funnel_probe.gd',
+            'res://scripts/terrain/dm24_canonical_stage_priority.gd',
+            'res://scripts/terrain/terrain_object_effect_runtime.gd',
+            'res://scripts/terrain/terrain_demo.gd',
+            'res://tests/experiments/dm22_scope_lifecycle_contract.gd'
+          )){
+            & $env:GODOT_BIN --headless --path .\game --check-only --script $file
+            if($LASTEXITCODE -ne 0){throw "DM24_SCRIPT_PARSE_FAILED $file"}
+          }
+          Write-Host 'DM24_PARSE_PASS'
+      - name: DM24 source lifecycle and focus dependency correlation, canonical parity
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          foreach($case in @(
+            @{file='res://tests/experiments/dm24_canonical_stage_funnel_contract.gd';receipt='DM24_STAGE_CONTRACT_PASS'},
+            @{file='res://tests/experiments/dm23_region_fair_queue_contract.gd';receipt='DM23_CONTRACT_PASS'},
+            @{file='res://tests/experiments/dm22_scope_lifecycle_contract.gd';receipt='DM22_SCOPE_PROBE_PASS'},
+            @{file='res://tests/experiments/dm19_cold_attribution_contract.gd';receipt='DM19_COLD_PROFILE_PASS'},
+            @{file='res://tests/experiments/dm18_canonical_cache_contract.gd';receipt='DM18_CANONICAL_CACHE_PASS'},
+            @{file='res://tests/experiments/dm17_sparse_lattice_contract.gd';receipt='DM17_SPARSE_LATTICE_PASS'},
+            @{file='res://tests/experiments/dm11_canonical_b4_parity.gd';receipt='DM11_CANONICAL_PARITY_PASS'},
+            @{file='res://tests/issue108_d7_3_projection_source_cache_tests.gd';receipt='PASS'}
+          )){
+            $out=& $env:GODOT_BIN --headless --path .\game --script $case.file 2>&1 | Out-String
+            Write-Host $out
+            if($LASTEXITCODE -ne 0 -or -not $out.Contains($case.receipt) -or
+               $out -match 'SCRIPT ERROR:|Parse Error:|DM24_STAGE_CONTRACT_FAIL:|DM23_CONTRACT_FAILURE:|DM22_SCOPE_PROBE_FAILURE:'){
+              throw "DM24_EXACT_FAILED $($case.file)"
+            }
+          }
+          Write-Host 'DM24_ALL_CONTRACTS_PASS'
+
+  smoke:
+    needs: exact
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 45
+    env: &bench_env
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+      SANDBOX_TERRAIN_BACKEND: b4
+      SANDBOX_DM9_FAST_B4: '1'
+      SANDBOX_DM9_PREFETCH: '0'
+      SANDBOX_DM9_VISUAL_ADAPTIVE: '1'
+      SANDBOX_DM9_VISUAL_WORKERS: '4'
+      SANDBOX_DM11_CANONICAL_FAST_B4: '1'
+      SANDBOX_DM11_VISUAL_LANE: '0'
+      SANDBOX_DM12_SURFACE_SLICE: '1'
+      SANDBOX_DM12_FRAME_TRACE: '0'
+      SANDBOX_DM13_WATER_WORKERS: '1'
+      SANDBOX_DM13_WATER_NATIVE: '1'
+      SANDBOX_DM14_DENSE_REQUIRED: '1'
+      SANDBOX_DM14_LAZY_ROUTES: '0'
+      SANDBOX_DM15_DORMANT_ROLLUP: '1'
+      SANDBOX_DM15_RELEASE_TRACE: '0'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Engine import
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          & $env:GODOT_BIN --headless --editor --path .\game --import
+          if($LASTEXITCODE -ne 0){throw 'DM24_SMOKE_IMPORT_FAILED'}
+      - name: 10-trial canonical stage funnel A/B smoke with equal trace
+        timeout-minutes: 40
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          & .\scripts\perf\run-dm24-stage-queue-ab.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir (Join-Path $env:RUNNER_TEMP 'dm24-stage-smoke') -ColdPairs 2 -WarmPairs 1 -LongPairs 2 -IdlePairs 0
+          if($LASTEXITCODE -ne 0){throw 'DM24_SMOKE_FAIL'}
+          Write-Host 'DM24_SMOKE_PASS'
+      - name: Preserve smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm24-stage-smoke-evidence
+          path: |
+            ${{ runner.temp }}\dm24-stage-smoke\**\*.log
+            ${{ runner.temp }}\dm24-stage-smoke\**\*.json
+            ${{ runner.temp }}\dm24-stage-smoke\*.json
+          retention-days: 21
+          if-no-files-found: warn
+
+  factorial:
+    needs: smoke
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 160
+    env: *bench_env
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Engine import
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          & $env:GODOT_BIN --headless --editor --path .\game --import
+          if($LASTEXITCODE -ne 0){throw 'DM24_FACTORIAL_IMPORT_FAILED'}
+      - name: 40-trial canonical stage fair A/B 18mps, same observer cost
+        timeout-minutes: 150
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          & .\scripts\perf\run-dm24-stage-queue-ab.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir (Join-Path $env:RUNNER_TEMP 'dm24-stage-validated') -ColdPairs 6 -WarmPairs 4 -LongPairs 8 -IdlePairs 2
+          if($LASTEXITCODE -ne 0){throw 'DM24_FACTORIAL_FAILED'}
+          Write-Host 'DM24_FACTORIAL_PASS'
+      - name: Archive every trial, block and inference
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm24-stage-validated-evidence
+          path: |
+            ${{ runner.temp }}\dm24-stage-validated\**\*.log
+            ${{ runner.temp }}\dm24-stage-validated\**\*.json
+            ${{ runner.temp }}\dm24-stage-validated\*.json
+          retention-days: 21
+          if-no-files-found: warn
