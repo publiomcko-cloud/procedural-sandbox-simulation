@@ -12,6 +12,7 @@ const ProjectionBuildJob := preload("res://scripts/terrain/terrain_object_effect
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
 const LookaheadPolicy := preload("res://scripts/terrain/terrain_stream_lookahead_policy.gd")
 const DM14DenseWindow := preload("res://scripts/terrain/dm14_effect_dense_window.gd")
+const DM23FairPolicy := preload("res://scripts/terrain/dm23_source_fair_queue_policy.gd")
 
 # Public v1 contracts bound horizontal reach:
 # translation <= 8 m, half extent <= 1.8 m, scale <= 5x, roughness <= 0.1 m.
@@ -57,6 +58,21 @@ var _projection_source_cache_order: Array[String] = []
 var _prefetch_error := ""
 # DM22 observer: same instrumentation, allocation and overhead in every arm.
 var _dm22_probe: RefCounted
+# DM23 FAIR POLICY: same shadow evaluation, maps and counters in A/B arms.
+var _dm23_measure_enabled := false
+var _dm23_fair_enabled := false
+var _dm23_first_queued_usec: Dictionary = {}
+var _dm23_last_promotion_usec: Dictionary = {}
+var _dm23_dispatch_sequence := 0
+var _dm23_metrics: Dictionary = {
+	"promotion_checks": 0,
+	"shadow_promotions_blocked": 0,
+	"applied_promotions_blocked": 0,
+	"shadow_oldest_fair_slots": 0,
+	"applied_oldest_fair_slots": 0,
+	"max_queued_age_usec": 0,
+	"source_dispatches": 0
+}
 var _perf_trace_enabled := false
 # DM14 hotspot diagnostics, separate from the normal performance summary.
 var _dm14_effect_trace := false
@@ -122,6 +138,9 @@ func initialize(
 		"SANDBOX_DM14_EFFECT_TRACE"
 	) == "1"
 	_dm14_dense_enabled = OS.get_environment("SANDBOX_DM14_DENSE_REQUIRED") == "1"
+	_dm23_measure_enabled = OS.get_environment("SANDBOX_DM23_STAGE_TRACE") == "1" \
+		and OS.get_environment("SANDBOX_STREAM_BENCHMARK") == "1"
+	_dm23_fair_enabled = OS.get_environment("SANDBOX_DM23_FAIR_SOURCE_QUEUE") == "1"
 	if object_stream_value == null 		or not object_stream_value.has_method("get_authoritative_region_projection_source") 		or not object_stream_value.has_method("get_command_world_revision"):
 		initialization_error = "terrain_effect_runtime_object_stream_invalid"
 		return _failure(initialization_error)
@@ -136,6 +155,10 @@ func initialize(
 	_prefetch_queue.clear()
 	_prefetch_scope_ids.clear()
 	_prefetch_urgent_scope_ids.clear()
+	_dm23_first_queued_usec.clear()
+	_dm23_last_promotion_usec.clear()
+	_dm23_dispatch_sequence = 0
+	_dm23_reset_metrics()
 	_lookahead_last_motion_pair = ""
 	_lookahead_reorders = 0
 	_prefetch_generation_jobs.clear()
@@ -174,6 +197,23 @@ func set_dm22_probe(probe: RefCounted) -> void:
 	_dm22_probe = probe
 
 
+func dm23_fair_metrics() -> Dictionary:
+	var out := _dm23_metrics.duplicate()
+	out["fair_enabled"] = _dm23_fair_enabled
+	out["trace_enabled"] = _dm23_measure_enabled
+	out["current_pending_queue"] = _prefetch_queue.size()
+	return out
+
+
+func dm23_reset_metrics() -> void:
+	_dm23_reset_metrics()
+
+
+func _dm23_reset_metrics() -> void:
+	for key_value in _dm23_metrics:
+		_dm23_metrics[key_value] = 0
+
+
 func set_incremental_prefetch_enabled(enabled: bool) -> void:
 	if incremental_prefetch_enabled and not enabled:
 		wait_for_prefetch_jobs()
@@ -182,6 +222,8 @@ func set_incremental_prefetch_enabled(enabled: bool) -> void:
 		_prefetch_queue.clear()
 		_prefetch_scope_ids.clear()
 		_prefetch_urgent_scope_ids.clear()
+		_dm23_first_queued_usec.clear()
+		_dm23_last_promotion_usec.clear()
 		_lookahead_last_motion_pair = ""
 		_prefetch_generation_jobs.clear()
 		_prefetch_task_by_scope.clear()
@@ -368,10 +410,41 @@ func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
 						"projection_in_flight": _prefetch_projection_jobs.size(),
 					})
 
-	# Stage 1: keep two deterministic source-generation jobs in flight.
+	# Stage 1: keep the same two generation slots. In the treatment, give
+	# at most one of every three slots to a source older than 700ms.
+	# Evaluate the SAME shadow decision in the control for equal trace cost.
 	while _prefetch_generation_jobs.size() 		< MAX_PREFETCH_GENERATION_JOBS_IN_FLIGHT 		and not _prefetch_queue.is_empty():
-		var region: Vector2i = _prefetch_queue.pop_front()
+		var dispatch_now := Time.get_ticks_usec()
+		var chosen_index := -1
+		var use_aged := false
+		if _dm23_measure_enabled or _dm23_fair_enabled:
+			chosen_index = DM23FairPolicy.oldest_eligible_index(
+				_prefetch_queue, _dm23_first_queued_usec, dispatch_now
+			)
+			use_aged = DM23FairPolicy.apply_fair_slot(
+				_dm23_dispatch_sequence, chosen_index
+			)
+			_dm23_dispatch_sequence += 1
+			if use_aged:
+				_dm23_metrics["shadow_oldest_fair_slots"] += 1
+			if chosen_index >= 0:
+				var oldest: Vector2i = _prefetch_queue[chosen_index]
+				_dm23_metrics["max_queued_age_usec"] = maxi(
+					int(_dm23_metrics["max_queued_age_usec"]),
+					dispatch_now - int(_dm23_first_queued_usec.get(oldest, dispatch_now))
+				)
+		var region: Vector2i
+		if _dm23_fair_enabled and use_aged:
+			region = _prefetch_queue[chosen_index]
+			_prefetch_queue.remove_at(chosen_index)
+			_dm23_metrics["applied_oldest_fair_slots"] += 1
+		else:
+			region = _prefetch_queue.pop_front()
 		var scope_id := Contract.scope_id_for_region(region)
+		if _dm23_measure_enabled or _dm23_fair_enabled:
+			_dm23_metrics["source_dispatches"] += 1
+			_dm23_first_queued_usec.erase(region)
+			_dm23_last_promotion_usec.erase(region)
 		_prefetch_urgent_scope_ids.erase(scope_id)
 		if not _protected_scope_ids.is_empty() 			and not _protected_scope_ids.has(scope_id):
 			_prefetch_scope_ids.erase(scope_id)
@@ -416,6 +489,9 @@ func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
 					>= MAX_PREFETCH_PROJECTION_JOBS_IN_FLIGHT
 			):
 				_prefetch_queue.push_front(region)
+				if _dm23_measure_enabled or _dm23_fair_enabled:
+					_dm23_first_queued_usec[region] = dispatch_now
+					_dm23_last_promotion_usec[region] = -1
 				break
 			cached_source_record = _projection_source_cache_lookup(
 				region, authority_revision
@@ -1057,17 +1133,38 @@ func _enqueue_prefetch_regions(
 			continue
 		if _prefetch_scope_ids.has(scope_id):
 			if high_priority:
-				# Move an existing background request to the front deterministically.
 				for index in range(_prefetch_queue.size()):
-					if _prefetch_queue[index] == region:
-						_prefetch_queue.remove_at(index)
-						to_add.append(region)
-						if _dm22_probe != null:
-							_dm22_probe.reprioritized(scope_id)
+					if _prefetch_queue[index] != region:
+						continue
+					# Evaluate a promotion cooldown identically in both arms.
+					# The control only observes this decision, never applies it.
+					var promote := true
+					if _dm23_measure_enabled or _dm23_fair_enabled:
+						var now_usec := Time.get_ticks_usec()
+						promote = DM23FairPolicy.should_repromote(
+							int(_dm23_last_promotion_usec.get(region, -1)),
+							now_usec, index
+						)
+						_dm23_metrics["promotion_checks"] += 1
+						if promote:
+							_dm23_last_promotion_usec[region] = now_usec
+						else:
+							_dm23_metrics["shadow_promotions_blocked"] += 1
+					if _dm23_fair_enabled and not promote:
+						_dm23_metrics["applied_promotions_blocked"] += 1
 						break
+					_prefetch_queue.remove_at(index)
+					to_add.append(region)
+					if _dm22_probe != null:
+						_dm22_probe.reprioritized(scope_id)
+					break
 			continue
 		_prefetch_scope_ids[scope_id] = true
 		to_add.append(region)
+		if _dm23_measure_enabled or _dm23_fair_enabled:
+			var now_usec := Time.get_ticks_usec()
+			_dm23_first_queued_usec[region] = now_usec
+			_dm23_last_promotion_usec[region] = now_usec if high_priority else -1
 		if _dm22_probe != null:
 			_dm22_probe.queued(
 				scope_id, Time.get_ticks_usec(), _prefetch_queue.size(), high_priority
@@ -1101,6 +1198,12 @@ func _filter_prefetch_to_protected() -> void:
 			if not kept_ids.has(old_scope):
 				_dm22_probe.cancelled(old_scope, "left_protected_queue")
 	_prefetch_queue = kept
+	if _dm23_measure_enabled or _dm23_fair_enabled:
+		for region_value in _dm23_first_queued_usec.keys():
+			var old_region: Vector2i = region_value
+			if not kept_ids.has(Contract.scope_id_for_region(old_region)):
+				_dm23_first_queued_usec.erase(old_region)
+				_dm23_last_promotion_usec.erase(old_region)
 	for jobs in [_prefetch_generation_jobs, _prefetch_projection_jobs]:
 		for task_id_value in jobs:
 			var task_id := int(task_id_value)
