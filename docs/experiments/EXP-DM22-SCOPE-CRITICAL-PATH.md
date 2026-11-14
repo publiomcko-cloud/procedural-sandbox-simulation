@@ -55,4 +55,57 @@ The two warmed runs had a shorter average source queue delay **166.819ms**, proj
 
 **Equal cost:** both arms report `trace_enabled=true`, same DM19 diagnostics and full lifecycle hooks. Their cold A/A differences in focus absence were +0.972 and −9.305 p.p. despite no code behavior difference; this demonstrates meaningful **runner/scheduling noise** and why uninstrumented-to-instrumented comparison would be invalid. An intervention must outperform this noise in a larger paired study.
 
-The 24-run replication is in progress; the smoke is not sufficient to approve source scheduling changes.
+The 24-run replication **completed successfully**. Its terminal results and decision are recorded below; no source scheduling change was made.
+
+
+## Replication final — 24 execuções A/A com custo equivalente de instrumentação
+
+[GitHub Actions run 43591999912](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43591999912): **COMPLETED / success** em 2026-11-14 12:09 UTC, commit do teste `40e5ddf8a488cd2b2a2bbf90a0008bcedec90194`. Jobs `exact`, `smoke`, `factorial` PASS. **24 execuções replicadas**: 8 cold-forward (4 pares), 8 warm-forward (4 pares), 4 warm-long (2 pares) e 4 idle (2 pares), 12 pares A/A nulos. As 6 corridas smoke são separadas e não integradas à inferência pareada replicada.
+
+**Paridade experimental:** todos os 24 receipts: `trace_enabled=true`, `dm22_scope_trace_enabled=true`, `dm19_cold_diagnostic_enabled=true`, DM18 cache ON, DM20/DM21 OFF, perf trace pesado OFF. O controle `reference` e o `repeat` executam **o mesmo código de coleta, armazenamento, agregação e emissão de recibos**; nenhuma mudança de algoritmo ou worker entre braços. A/A não mede overhead absoluto relativamente a jogo sem DM22, apenas remove o viés diferencial de instrumentação entre braços. Mantenha esse mesmo overhead no baseline de qualquer experimento futuro.
+
+### Decomposição das fontes por cenário (médias de cada execução)
+
+| Medida | Cold-forward, 8 | Warm-forward, 8 | Warm-long, 4 | Idle, 4 |
+|---|---:|---:|---:|---:|
+| Entrada na fila → despacho da geração, wall-clock | **854,22ms** | 151,23ms | 105,01ms | 1.597,00ms |
+| Worker de geração, CPU | 2,13ms | 2,19ms | 2,08ms | 1,95ms |
+| Finalização fonte, CPU main | 0,74ms | 0,77ms | 0,70ms | 0,66ms |
+| Worker de projeção, CPU | **82,67ms** | 89,58ms | 79,51ms | 74,66ms |
+| Publicação scope, CPU main | **0,48ms** | 0,47ms | 0,29ms | 0,45ms |
+| Tempo completo source fila→publicação, wall-clock | **1.065,68ms** | 389,04ms | 243,47ms | 1.784,72ms |
+| Chamadas effect snapshot pendentes / corrida | 257,38 | 0 | **700,25** | 194,00 |
+
+As médias `scope_queue_ms` consideram somente scopes efetivamente publicados; scopes descartados e enfileirados que não publicaram devem ser analisados separadamente. Tempo de worker CPU é concorrente e **não deve ser somado como latência serial de regiões**. A fila da fonte em `cold-forward` corresponde a ~80% do intervalo completo médio observado, mas a decomposição não implica que 854ms de todo source sejam tempo de bloqueio direto da região focal.
+
+### Correlação de *primeiro chunk focal* — alcance e limitação
+
+- Cold-forward: **33/33 últimas fontes críticas vinculadas** tiveram a fila como fase dominante; ~**1.555,07ms** de fila por última fonte, incluindo **espera antes da primeira tentativa focal**.
+- Primeira tentativa de chunk focal → primeiro despacho: **402,00ms** em média das corridas com vínculo. Última dependência publicada → despacho: aproximadamente **4,90ms**. Preparação de efeitos bloqueou a maior parte do período entre primeira tentativa e despacho.
+- Fila `scope_queue_events`: **1.629** admissões em oito corridas frias, **10.412** repriorizações urgentes da fila (média **1.301,5**/run), e **150** descartes de scopes ainda enfileirados ao sair da janela protegida. O método `_enqueue_prefetch_regions(..., high_priority=true)` move uma fonte já enfileirada ao início novamente quando outra tentativa de snapshot requer suas dependências, mesmo que a fonte já seja conhecida: **possível churn/falta de justiça**, hipótese ainda não provada por causalidade.
+- Warm-forward: **zero** primeiras submissões de região focal vinculadas durante a medição; regiões próximas já estavam preparadas antes de se tornarem foco. Não interpretar como ausência de dependências.
+- Warm-long: apenas **3** primeiras submissões focais entre quatro corridas, porém **nenhuma última fonte crítica publicada foi vinculada**; houve **2.131 tentativas pendentes**, e a ausência canônica segue ~24%. O probe atual liga a lista de fontes somente ao estágio iniciado quando **já era foco**, e perde a história de uma região que começou como vizinha e depois se tornou foco. Consequentemente, **não permite atribuir causalmente a espera sustentada warm-long** a um scope específico.
+- Idle: quatro primeiros chunks vinculados, todos também com dominância de fila; o cenário é startup parado, não movimento contínuo.
+
+**Próxima intervenção metodológica necessária:** registrar dependências e timestamps do primeiro chunk para **todos os estágios LOAD iniciados na janela**, acompanhar promoções *vizinho → foco* e medir `stage_start → first_dispatch`, `focus_entry → first_dispatch`, `last_scope_publish → first_dispatch`, e cancelamentos pela janela. Em uma segunda campanha causal, experimentar justiça/deduplicação de prioridades na fila de scopes ou prioridade protegida das dependências do foco, **com a mesma instrumentação em controle e tratamento**, sem aumentar worker slots ou modificar revisões/projeção/DM18.
+
+### Ruído e capacidade de detectar melhoria: pares A/A nulos
+
+| Cenário | Δ ausência foco (repeat−reference) | IC95% pareado | Δ frame p99 | IC95% pareado |
+|---|---:|---:|---:|---:|
+| Cold-forward (4 pares) | **+0,347 p.p.** | [−2,853; +3,547] | −0,261ms | [−10,290; +9,767] |
+| Warm-forward (4 pares) | −1,042 p.p. | [−4,357; +2,274] | −0,680ms | [−7,590; +6,230] |
+| Warm-long (2 pares) | −0,271 p.p. | [−3,714; +3,172] | 0,000ms | [0,000; 0,000]* |
+| Idle (2 pares) | N/A | N/A | 0,000ms | [0,000; 0,000]* |
+
+*Os zeroes em p99 do warm-long/idle refletem o quantil discretizado/limitado pela taxa de frames neste conjunto; não estabelecem igualdade de cauda entre execuções. Nos quatro pares frios, HIGH completos foram 57 (controle) vs 54,5 (repeat) em média, com jobs canônicos 11,5 menores no repeat embora ambos braços tenham exatamente o mesmo código: **sinal de ruído temporal/ordem**. Não reinterpretar diferenças A/A como melhoria causal.
+
+### Veredito terminal
+
+`DM22_DIAGNOSTIC_QUALIFIED_QUEUE_DOMINATES_COLD_FOCUS_BUT_WARM_LONG_LINKAGE_INCOMPLETE`.
+
+1. **Forte evidência descritiva:** espera na fila das fontes é a fase dominante das dependências críticas vinculadas na partida a frio, enquanto a CPU de geração é pequena; projeção em worker ainda tem custo material (~80ms/scope).
+2. **Sem otimização ou promoção:** A/A mede, não altera execução, e não demonstra melhoria de disponibilidade. A variação natural medida precisa fazer parte do gate de qualquer novo experimento.
+3. **Lacuna de instrumentação identificada:** no trajeto longo após pré-aquecimento, a atribuição de último source crítico da região que se torna focal continua incompleta; é necessária instrumentação de estágio iniciando como vizinho.
+4. **Próximo alvo possível:** justiça e idade na fila de fontes, com foco dependente de região canônica, mas a avaliação deve medir se o último source realmente publica mais cedo e se a disponibilidade/p99 melhoram; meramente trocar ordenação não basta (DM19-B foi rejeitado).
+5. Preservar **DM18** e os contratos de edits, efeitos, revisão, objetos, simulação e HIGH. A `main` permanece intacta. Não há qualificação visual interativa da DM22; é instrumentação headless somente.
