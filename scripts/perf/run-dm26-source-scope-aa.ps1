@@ -1,6 +1,7 @@
 # DM26: A/A scope-state diagnosis. DM25 observer + DM26 observer paid identically by both arms.
 # DM25 observer-only matched A/A: DM18 ON, DM24 policy OFF, equal stage/probe cost.
 param(
+  [switch]$SingleTrial,
   [ValidateRange(1,12)][int]$ColdPairs=6,
   [ValidateRange(1,12)][int]$WarmPairs=4,
   [ValidateRange(0,12)][int]$LongPairs=8,
@@ -25,6 +26,11 @@ $scenarios=@(
   @{name='warm-long';route='outback-18';frames=2400;warm=900;pairs=$LongPairs},
   @{name='idle';route='idle';frames=2400;warm=0;pairs=$IdlePairs}
 )
+if($SingleTrial){
+  # Exactly one representative primary-condition execution, not a matched pair.
+  # Uses full canonical parameters and ALL diagnostic observers.
+  $scenarios=@(@{name='warm-long';route='outback-18';frames=2400;warm=900;pairs=1})
+}
 try {
   foreach ($scenario in $scenarios){
     if ([int]$scenario.pairs -eq 0){continue}
@@ -34,7 +40,7 @@ try {
     $warm=[int]$scenario.warm
     for($p=0;$p -lt [int]$scenario.pairs;$p++){
       # ABBA order. BOTH arms always have the same, full instrumentation.
-      $order=$(if($p % 2 -eq 0){@('control','repeat')}else{@('repeat','control')})
+      $order=$(if($SingleTrial){@('control')}elseif($p % 2 -eq 0){@('control','repeat')}else{@('repeat','control')})
       $byArm=@{}
       foreach($arm in $order){
         $trial='{0}-{1:d2}-{2}' -f $name,$p,$arm
@@ -155,6 +161,9 @@ try {
         if($dm25Hits -ne $dm26Hits){
           throw "DM26_SCOPE_CENSUS_MISMATCH trial=$trial dm25=$dm25Hits dm26=$dm26Hits"
         }
+        if($SingleTrial -and ($focalAttributed -le 0 -or $dm26Hits -le 0)){
+          throw "DM26_SINGLE_TRIAL_NO_FOCAL_CAUSAL_COVERAGE trial=$trial first=$focalAttributed source=$dm26Hits"
+        }
         $record=[pscustomobject][ordered]@{
             trial=$trial;scenario=$name;pair=$p;arm=$arm;sha=$sha;frames=$frames;warmup=$warm
             trace_enabled=$true
@@ -180,6 +189,7 @@ try {
         $byArm[$arm]=$record
         Write-Host ('DM26_TRIAL='+($record|ConvertTo-Json -Compress -Depth 18))
       }
+      if($SingleTrial){continue}
       $base=$byArm['control']
       $test=$byArm['repeat']
       $paired=[pscustomobject][ordered]@{
@@ -217,6 +227,12 @@ try {
 } finally {
   $env:APPDATA=$oldAppData
 }
+if($SingleTrial){
+  if($rows.Count -ne 1 -or $pairs.Count -ne 0){throw "DM26_SINGLE_TRIAL_BAD_COUNT trials=$($rows.Count) pairs=$($pairs.Count)"}
+  $rows|ConvertTo-Json -Depth 18|Set-Content -LiteralPath (Join-Path $EvidenceDir 'single-trial.json') -Encoding UTF8
+  Write-Host "DM26_SINGLE_TRIAL_PASS trials=1 sha=$sha observer_equal_to_factorial=1"
+  return
+}
 $summary=@{}
 foreach($scenario in @('cold-forward','warm-forward','warm-long','idle')){
   $r=@($rows|Where-Object {$_.scenario -eq $scenario})
@@ -253,6 +269,6 @@ $analysis=[ordered]@{
   perf_trace_off=$true;dm18_unchanged=$true
   summary=$summary
 }
-$analysis|ConvertTo-Json -Depth 12|Set-Content -LiteralPath (Join-Path $EvidenceDir 'dm24-analysis.json') -Encoding UTF8
+$analysis|ConvertTo-Json -Depth 12|Set-Content -LiteralPath (Join-Path $EvidenceDir 'dm26-analysis.json') -Encoding UTF8
 Write-Host ('DM26_FINAL_ANALYSIS='+($analysis|ConvertTo-Json -Compress -Depth 12))
 Write-Host "DM26_SCOPE_CAMPAIGN_COMPLETE trials=$($rows.Count) sha=$sha"
