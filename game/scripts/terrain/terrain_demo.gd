@@ -1576,6 +1576,11 @@ func _process(delta: float) -> void:
 			int(_stream_budget_state.get("dispatch_limit", 1)),
 			_mesh_jobs.size(), _mesh_job_limit
 		)
+		if _dm24_funnel != null:
+			_dm24_funnel.focal_frame_outcome(
+				dm19_focus_id, active_regions.has(dm19_focus_id),
+				loading_regions.get(dm19_focus_id, {})
+			)
 	if _dm18_diagnostic_enabled and _stream_bench_frames_done >= 1 \
 	and _stream_bench_warmup_remaining == 0 and not _stream_bench_reported:
 		var focus_id := _region_id(focus_region_key)
@@ -4469,7 +4474,10 @@ func _prepare_terrain_effect_snapshot(
 		var stage_token := int(_dm22_snapshot_context.get("token", -1))
 		_dm24_funnel.first_snapshot(selected_id, stage_token, Time.get_ticks_usec())
 		if bool(prepared.get("pending", false)):
-			_dm24_funnel.effect_pending(selected_id, stage_token)
+			_dm24_funnel.effect_pending(
+				selected_id, stage_token,
+				prepared.get("missing_source_regions", [])
+			)
 	if prepared.get("ok", false):
 		_terrain_effect_status = "Terrain-object effects active (%d frame(s), %d resident scope(s))" % [
 			int(prepared.get("effect_count", 0)),
