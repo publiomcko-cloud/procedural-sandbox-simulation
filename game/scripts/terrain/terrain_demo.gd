@@ -25,6 +25,7 @@ const EnvironmentHydrologyDomainScript := preload("res://scripts/simulation/envi
 const EnvironmentSurfaceCacheJobScript := preload("res://scripts/simulation/environment_surface_cache_job.gd")
 const DM16BenchmarkProbe := preload("res://scripts/diagnostics/dm16_benchmark_probe.gd")
 const DM19ColdAttribution := preload("res://scripts/diagnostics/dm19_cold_attribution.gd")
+const DM22ScopeLifecycleProbe := preload("res://scripts/diagnostics/dm22_scope_lifecycle_probe.gd")
 const DM18CanonicalCache := preload("res://scripts/terrain/dm18_canonical_region_cache.gd")
 const DM12SnapshotBatch := preload("res://scripts/terrain/dm12_surface_snapshot_batch.gd")
 const EnvironmentVisualScript := preload("res://scripts/simulation/environment_visual_presentation.gd")
@@ -279,6 +280,10 @@ var _dm18_job_times: Dictionary = {
 }
 # DM19: profiling only, allocated exclusively for benchmark when explicitly enabled.
 var _dm19_cold_profile: RefCounted
+# DM22 is ALWAYS enabled in both benchmark arms. No treatment-specific trace.
+var _dm22_probe: RefCounted
+var _dm22_in_mesh_dispatch := false
+var _dm22_snapshot_context: Dictionary = {}
 
 var _dm12_surface_slice := false
 var _dm14_lazy_route_enabled := false
@@ -434,6 +439,9 @@ var _last_edit_rejection := ""
 
 func _ready() -> void:
 	_perf_trace_enabled = PerformanceTrace.is_enabled()
+	if OS.get_environment("SANDBOX_DM22_SCOPE_TRACE") == "1" \
+	and OS.get_environment("SANDBOX_STREAM_BENCHMARK") == "1":
+		_dm22_probe = DM22ScopeLifecycleProbe.new()
 	if OS.get_environment("SANDBOX_DM19_COLD_DIAGNOSTIC") == "1" \
 	and OS.get_environment("SANDBOX_STREAM_BENCHMARK") == "1":
 		_dm19_cold_profile = DM19ColdAttribution.new()
@@ -652,6 +660,8 @@ func _ready() -> void:
 		)
 		if effect_initialization.get("ok", false):
 			terrain_effect_runtime.set_incremental_prefetch_enabled(true)
+			if _dm22_probe != null:
+				terrain_effect_runtime.set_dm22_probe(_dm22_probe)
 			_terrain_effect_status = "Terrain-object effects ready"
 		else:
 			terrain_effect_runtime = null
@@ -2275,6 +2285,8 @@ func _process_free_exploration(delta: float) -> void:
 					"dm18_cache_enabled": _dm18_cache_enabled,
 					"dm18_diagnostic_enabled": _dm18_diagnostic_enabled,
 					"dm19_cold_diagnostic_enabled": _dm19_cold_profile != null,
+					"dm22_scope_trace_enabled": _dm22_probe != null,
+					"dm22_scope_trace": _dm22_probe.summary() if _dm22_probe != null else {},
 					"dm19_cold": _dm19_cold_profile.summary() if _dm19_cold_profile != null else {},
 					"dm19_effect_runtime": terrain_effect_runtime.get_performance_snapshot() if _dm19_cold_profile != null and terrain_effect_runtime != null and bool(terrain_effect_runtime.get("initialized")) else {},
 					"dm18_cache": _dm18_cache.stats() if _dm18_cache_enabled else {},
@@ -2625,6 +2637,8 @@ func _reconcile_region_window(force: bool = false) -> void:
 					_dm9_stages_discarded += 1
 					_dm9_trace_stage("discard", stage)
 				_discard_progressive_chunks(id, "left_window")
+				if _dm22_probe != null and String(stage.get("purpose", "")) == "load":
+					_dm22_probe.focus_cancel(id, int(stage.get("stage_token", -1)))
 				if _dm19_cold_profile != null:
 					_dm19_cold_profile.cancel(id, "left_window")
 				loading_regions.erase(id)
@@ -3820,6 +3834,8 @@ func _process_one_chunk_job() -> void:
 	_dm12_stage("mesh_completed", started_usec)
 	started_usec = Time.get_ticks_usec()
 	_dispatch_mesh_jobs()
+	_dm22_in_mesh_dispatch = false
+	_dm22_snapshot_context = {}
 	_dm12_stage("mesh_dispatch", started_usec)
 	if loading_regions.is_empty() and global_rebuild_pending:
 		started_usec = Time.get_ticks_usec()
@@ -4038,6 +4054,7 @@ func _process_completed_mesh_jobs() -> void:
 
 
 func _dispatch_mesh_jobs() -> void:
+	_dm22_in_mesh_dispatch = _dm22_probe != null
 	var dispatch_started_usec := Time.get_ticks_usec()
 	# A blocked LOAD stage may be skipped for this invocation only. The
 	# selector never advances its chunk index, so exact order within each
@@ -4075,6 +4092,14 @@ func _dispatch_mesh_jobs() -> void:
 			_fail_region_stage(id, "Injected mesh-stage failure; prior meshes retained")
 			continue
 		var coordinate: Vector2i = request["coordinate"]
+		if _dm22_in_mesh_dispatch:
+			_dm22_snapshot_context = {
+				"first_focus": String(stage.get("purpose", "")) == "load"
+					and int(stage.get("submit_index", 0)) == 0
+					and stage.get("region_key") == focus_region_key
+					and not bool(stage.get("dm9_speculative", false)),
+				"id": id, "token": int(stage["stage_token"])
+			}
 		var queue_index: int = int(stage["submit_index"])
 		var enqueued_usec := int(stage["chunk_queued_usec"][queue_index])
 		var submitted_usec := Time.get_ticks_usec()
@@ -4273,6 +4298,11 @@ func _dispatch_mesh_jobs() -> void:
 		if task_id < 0:
 			_fail_region_stage(id, "Worker pool rejected a mesh job; previous visible meshes retained")
 			continue
+		if _dm22_in_mesh_dispatch and bool(_dm22_snapshot_context.get("first_focus", false)):
+			_dm22_probe.focus_first_submitted(
+				String(_dm22_snapshot_context["id"]),
+				int(_dm22_snapshot_context["token"]), Time.get_ticks_usec()
+			)
 		stage["submit_index"] = int(stage["submit_index"]) + 1
 		stage["pending_count"] = int(stage["pending_count"]) + 1
 		loading_regions[id] = stage
@@ -4328,6 +4358,14 @@ func _prepare_terrain_effect_snapshot(
 	if _dm19_cold_profile != null:
 		_dm19_cold_profile.effect_result(
 			prepared, Time.get_ticks_usec() - dm19_effect_started, targets.size()
+		)
+	if _dm22_in_mesh_dispatch and _dm22_probe != null \
+	and bool(_dm22_snapshot_context.get("first_focus", false)):
+		_dm22_probe.focus_prepare(
+			String(_dm22_snapshot_context["id"]),
+			int(_dm22_snapshot_context["token"]), Time.get_ticks_usec(),
+			prepared.get("missing_source_regions", []),
+			bool(prepared.get("pending", false))
 		)
 	if prepared.get("ok", false):
 		_terrain_effect_status = "Terrain-object effects active (%d frame(s), %d resident scope(s))" % [
@@ -5872,6 +5910,8 @@ func _supersede_region_stage(id: String) -> void:
 	if not loading_regions.has(id):
 		return
 	var stale_stage: Dictionary = loading_regions[id]
+	if _dm22_probe != null and String(stale_stage.get("purpose", "")) == "load":
+		_dm22_probe.focus_cancel(id, int(stale_stage.get("stage_token", -1)))
 	if _dm19_cold_profile != null:
 		_dm19_cold_profile.cancel(id, "superseded")
 	loading_regions.erase(id)
