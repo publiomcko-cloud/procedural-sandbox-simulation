@@ -4491,10 +4491,10 @@ func _terrain_effect_snapshot_pending(result: Dictionary) -> bool:
 func _next_mesh_job_request(excluded: Dictionary = {}) -> Dictionary:
 	var selected := StreamDispatchSelector.next(loading_regions, excluded, focus_region_key)
 	if not _dm3_enabled() or selected.is_empty():
-		return selected
+		return _dm24_finish_selection(selected, excluded)
 	var selected_stage: Dictionary = loading_regions[selected["id"]]
 	if String(selected_stage.get("purpose", "")) != "load":
-		return selected
+		return _dm24_finish_selection(selected, excluded)
 	var best := selected
 	var best_rank := 2147483647
 	var forward := _dm3_forward()
@@ -4519,7 +4519,28 @@ func _next_mesh_job_request(excluded: Dictionary = {}) -> Dictionary:
 				"id": id, "coordinate": stage["chunk_coordinates"][index],
 				"index": index,
 			}
-	return best
+	return _dm24_finish_selection(best, excluded)
+
+
+## Both arms compute the same shadow selection. Only the opt-in treatment
+## applies it, and neither arm changes budgets or protected stage classes.
+func _dm24_finish_selection(original: Dictionary,
+		excluded: Dictionary) -> Dictionary:
+	if _dm24_funnel == null:
+		return original
+	var now_usec := Time.get_ticks_usec()
+	var shadow := DM24StagePriority.candidate(
+		loading_regions, excluded, focus_region_key, now_usec,
+		_dm24_dispatch_sequence, original
+	)
+	var used := shadow if _dm24_stage_fair_enabled else original
+	_dm24_funnel.selected(
+		original, shadow, used, loading_regions, now_usec,
+		_dm24_stage_fair_enabled
+	)
+	if not original.is_empty():
+		_dm24_dispatch_sequence += 1
+	return used
 
 
 func _stage_priority(purpose: String) -> int:
