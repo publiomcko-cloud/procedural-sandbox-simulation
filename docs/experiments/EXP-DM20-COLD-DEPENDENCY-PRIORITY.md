@@ -56,3 +56,50 @@ No workflow [43535376318](https://github.com/publiomcko-cloud/procedural-sandbox
 A: em cold, **106 tentativas de priming**, **52,5 snapshots reutilizados** por execução, **zero rejeições por revisão**; B: ~**462 overrides** de despacho por execução; A+B ambos são exercitados (40,5 snapshots e 480,5 overrides por execução). A e B não foram no-op, mas o ganho de cobertura não foi reproduzido no smoke cold. Em warm há efeito de piso: 0% de foco ausente em todos os braços, impossibilitando medir melhora por essa métrica num percurso de 12s.
 
 **Gate:** não promover com base em variação de p99 do smoke de 2 pares. Comparar os dados de 48 execuções em progresso, em especial percurso warm outback longo e intervalos pareados. Se não houver benefício e/ou picos piorarem, deixar ambas flags OFF por padrão.
+
+
+## Resultado final — 48 execuções replicadas (PASS)
+
+GitHub Actions [DM20 run 43535376318](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43535376318), commit `4fb2bb038ca6995f6f28c9403133f1d76dc88a76`, job `factorial` PASS em 2026-11-14 01:08 UTC. **48 execuções: 6 blocos cold straight, 4 warm straight, 2 warm outback, cada bloco com controle/A/B/A+B.** Ordem alternada em quadrado latino, seed única 424242 e mesmo runner Windows headless. Dados brutos preservados no artifact do workflow.
+
+### Ausência canônica e tail de frame, braço vs controle
+
+Diferenças pareadas (variante − controle); valores negativos indicam redução de ausência / frame time.
+
+| Cenário | Variante | Ausência foco (p.p.), IC95% | Frame p99 (ms), IC95% | >33ms (p.p.), IC95% |
+|---|---|---|---|---|
+| Cold straight, 6 blocos | A | −1,968 [−6,420; +2,485] | −0,222 [−4,891; +4,447] | **−0,0927 [−0,1680; −0,0173]** |
+| Cold straight, 6 blocos | B | −1,459 [−5,152; +2,235] | −1,630 [−6,150; +2,889] | −0,0232 [−0,1666; +0,1203] |
+| Cold straight, 6 blocos | A+B | −2,245 [−6,213; +1,722] | +3,791 [−2,936; +10,518] | ±0,000 [−0,261; +0,261] |
+| Warm straight, 4 blocos | A | +1,042 [−2,885; +4,968] | −4,240 [−14,259; +5,779] | −0,3818 [−1,155; +0,3915] |
+| Warm straight, 4 blocos | B | −0,2085 [−0,632; +0,215] | −2,275 [−11,475; +6,925] | −0,3125 [−0,865; +0,240] |
+| Warm straight, 4 blocos | A+B | −0,2085 [−0,632; +0,215] | −2,367 [−16,697; +11,964] | −0,347 [−1,102; +0,408] |
+| Warm outback, 2 blocos | A | −0,0415 [−4,279; +4,196] | −1,142 [−15,653; +13,369] | −0,1455 [−0,940; +0,649] |
+| Warm outback, 2 blocos | B | −0,1245 [−1,186; +0,937] | −1,142 [−15,653; +13,369] | −0,0835 [−0,611; +0,444] |
+| Warm outback, 2 blocos | A+B | +0,063 [−1,258; +1,384] | −1,142 [−15,653; +13,369] | +0,0625 [−0,732; +0,857] |
+
+### Médias absolutas de ausência do foco
+
+| Cenário | Controle | A | B | A+B |
+|---|---:|---:|---:|---:|
+| Cold straight | 33,241% | 31,273% | 31,782% | 30,996% |
+| Warm straight | 0,2085% | 1,250% | 0% | 0% |
+| Warm outback | 23,771% | 23,729% | 23,646% | 23,834% |
+
+**Evidência funcional (médias por corrida):**
+- Cold A: **107,17** tentativas de snapshot primer, **56,67** hits sem nenhuma rejeição de revisão, **102,33** frames de espera focal antes do primeiro despacho (controle **126,50**) e **314,33** preparações de efeitos pendentes (controle **290,67**).
+- Cold B: **479,33** escolhas efetivamente alteradas de prioridade, mas espera focal antes do primeiro despacho **118,33** frames e ausência do foco não melhoraram de maneira estatisticamente comprovada.
+- Cold A+B: **45** hits de snapshots, **482,33** overrides e **99,33** frames de foco aguardando o primeiro despacho (menos **27,17** que controle; IC95% [−38,00; −16,33]). Essa melhora de bucket intermediário **não se traduziu em ganho robusto de publicação canônica**; p99 piorou numericamente.
+- Warm straight A: preparações `pending` aumentaram em média **43,5** por corrida vs controle, IC95% [+17,34; +69,66]; cobertura não melhorou. A medição diagnostica que *priming* pode gerar tentativas redundantes ou deslocar orçamento.
+- Warm outback: cache DM18 registrou **51 hits por corrida em todos os braços**; ausência ~23,6–23,8% sem benefício reprodutível. A e B não alteraram os critérios de invalidação do cache.
+- Cobertura HIGH similar em todos os braços; sem prova de regressão funcional em testes headless, mas nenhum teste visual interativo foi realizado.
+
+### Conclusão e decisão
+
+**Veredito: `DM20_A_B_NO_PROVEN_CANONICAL_COVERAGE_GAIN`.** Os 48 benchmarks e todos os testes de integridade passaram. As duas variantes são reais, mas nenhum cenário mostrou melhora de ausência do foco com intervalo de confiança que exclua zero. **Não integrar A, B ou A+B ao perfil padrão ou à main.**
+
+A redução de frames >33ms para A na partida a frio tem intervalo nominal que exclui zero (n=6), mas é uma das muitas métricas/comparações; não houve correção de múltiplos testes e o efeito não se refletiu em uma melhoria inequívoca do p99 ou da cobertura. Trata-se apenas de sinal para futura investigação, não aprovação.
+
+Para a próxima fase, priorizar **garantia de dependências de efeitos/projeções prontas no momento do dispatch**, com medição de requests em fila vs in-flight e dos eventos de conclusão, sem reexecutar `prepare_targets_snapshot` a cada tentativa. Testar um mecanismo *dependency-ready gate* / single-flight para chunks e boundaries, sem aumentar worker pool. O outro eixo é *evitar refazer estágios que saíram da janela antes da publicação* (cancelamentos e mudanças de direção). Nenhum dos dois deve impactar o cache DM18 ou o HIGH. Requer regressão de edições/undo, efeitos, objetos e GUI GPU.
+
+A `main` permanece inalterada. DM18 preservado na base experimental; `SANDBOX_DM20_SNAPSHOT_PRIMER` e `SANDBOX_DM20_FOCUS_FIRST` ficam OFF por padrão.
