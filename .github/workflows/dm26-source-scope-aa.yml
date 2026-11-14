@@ -72,8 +72,43 @@ jobs:
           }
           Write-Host 'DM26_ALL_CONTRACTS_PASS'
 
-  smoke:
+  preflight:
     needs: exact
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 30
+    env: *bench_env
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Engine import
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          & $env:GODOT_BIN --headless --editor --path .\\game --import
+          if($LASTEXITCODE -ne 0){throw 'DM26_PREFLIGHT_IMPORT_FAILED'}
+      - name: Exactly one warm-long primary-condition trial with full observers
+        timeout-minutes: 25
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          & .\\scripts\\perf\\run-dm26-source-scope-aa.ps1 -SingleTrial -GodotBin $env:GODOT_BIN -EvidenceDir (Join-Path $env:RUNNER_TEMP 'dm26-single-preflight')
+          if($LASTEXITCODE -ne 0){throw 'DM26_SINGLE_TRIAL_EXECUTION_FAILED'}
+          Write-Host 'DM26_PREFLIGHT_GATE_PASS'
+      - name: Preserve single-trial evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm26-single-preflight-evidence
+          path: |
+            ${{ runner.temp }}\\dm26-single-preflight\\**\\*.log
+            ${{ runner.temp }}\\dm26-single-preflight\\**\\*.json
+            ${{ runner.temp }}\\dm26-single-preflight\\*.json
+          retention-days: 21
+          if-no-files-found: warn
+
+  smoke:
+    needs: preflight
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 45
     env: &bench_env
