@@ -43,7 +43,7 @@ Branch `exp/dm21-effect-readiness-and-stage-retention`, workflow [DM21 Actions](
 
 ## Status
 
-Implementation + contracts qualified. Benchmark smoke and replication in progress as of the initial document; results must be appended from real GitHub Actions job logs. **Default remains DM21 A/B OFF, DM18 preserved as user-approved experimental baseline, `main` unchanged.**
+Implementation + contracts qualified. Benchmarks smoke e replicação concluídos; resultados e veredito terminal abaixo. **Default remains DM21 A/B OFF, DM18 preserved as user-approved experimental baseline, `main` unchanged.**
 
 
 ## Evidência do smoke integrado — 16 execuções, PASS
@@ -70,3 +70,51 @@ B efetivamente conservou 2 estágios cold, mas **zero publicação de estágio c
 ### Gate
 
 Se a replicação não mostrar ganho reproduzível de cobertura e p99, deixar A e B OFF. Uma variante de A com notificação **por escopo efetivamente pendente**, que preserve prioridade urgente sem reenfileirar repetidamente 25 fontes, pode merecer teste separado; não alterar esta campanha durante a replicação.
+
+
+## Resultado terminal — campanha replicada de 56 execuções
+
+[GitHub Actions DM21 run 43586067986](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43586067986) — **success**, em **2026-11-14 11:13 UTC**, SHA `7ed9170866184135b43556a66b765c8c7a8e134d`. Três jobs `exact`, `smoke`, `factorial` PASS. Dataset replicado: **56 corridas**, 14 blocos de quatro braços, 42 diferenças pareadas; 6 blocos `cold-straight`, 4 `warm-straight`, 2 `warm-outback`, 2 `idle`. O smoke anterior contém 16 execuções adicionais e não é misturado ao conjunto inferencial de 56. Todas as variantes mantiveram DM18 ON, DM19 diagnostic ON, DM20 e DM17-A/B OFF, 18m/s (exceto idle), mesma seed 424242, e trace pesado OFF. Logs e recibos preservados no artifact do workflow.
+
+### Cobertura canônica, média absoluta por cenário
+
+| Cenário | Controle | A | B | A+B |
+|---|---:|---:|---:|---:|
+| Cold-straight, 6 blocos | 38,819% | 38,773% | 37,338% | 38,797% |
+| Warm-straight, 4 blocos | 3,160% | 0,659% | 1,250% | 0,000% |
+| Warm-outback, 2 blocos | 23,750% | 23,688% | 23,709% | 23,875% |
+
+### Diferenças pareadas: intervenção menos controle, com IC 95%
+
+| Cenário | Braço | Foco ausente, p.p. [IC95%] | Frame p99, ms [IC95%] |
+|---|---|---|---|
+| Cold, n=6 | A | −0,046 [−6,603; +6,511] | +0,767 [−2,770; +4,304] |
+| Cold, n=6 | B | −1,481 [−12,023; +9,060] | +1,402 [−0,887; +3,691] |
+| Cold, n=6 | A+B | −0,023 [−9,362; +9,316] | +2,371 [−3,239; +7,982] |
+| Warm, n=4 | A | −2,500 [−6,118; +1,117] | −0,760 [−11,017; +9,497] |
+| Warm, n=4 | B | −1,910 [−5,918; +2,099] | **+6,710 [−0,981; +14,400]** |
+| Warm, n=4 | A+B | −3,160 [−6,989; +0,670] | +2,892 [−4,037; +9,820] |
+| Warm long, n=2 | A | −0,063 [−0,323; +0,198] | +0,558 [−17,060; +18,175] |
+| Warm long, n=2 | B | −0,042 [−0,569; +0,486] | +0,228 [−2,669; +3,125] |
+| Warm long, n=2 | A+B | +0,125 [−0,930; +1,180] | −0,415 [−5,681; +4,852] |
+
+Nenhum IC95% de *foco ausente* exclui zero; tampouco está demonstrada não regressão de p99. Warm-B elevou numericamente p99 em **6,71ms** e piorou os quatro pares, embora seu IC95% inclua zero. As 2 execuções de cada braço no cenário longo/idle são exploratórias; não são evidência de equivalência. A comparação de 9 cenários/braços simultâneos não tem correção de multiplicidade, portanto não promover sinais isolados como conquistas causais.
+
+### Mecanismos testados — efeito observado vs resultado útil
+
+**A. Event-driven snapshot wait.** Em `cold-straight`, as chamadas `prepare_targets_snapshot` retornando `pending` caíram de média **284,67 para 23,17** (−91,9%); a espera DM21 foi registrada em **22,17 estágios/execução**, suprimiu **364,83 tentativas** e observou **152,5 notificações**, com **9,5 watchdogs**. Em `warm-outback`, contagens `pending` caíram de **886 para 50,5** (−94,3%), enquanto as fontes únicas continuam sendo produzidas pelo mesmo single-flight. Apesar disso, regiões canônicas ausentes permaneceram praticamente iguais: cold 38,819% → 38,773%; warm long 23,750% → 23,688%. Worker jobs cold 498,5 → 496,67; warm long 954 → 958,5 (sem economia substancial). **Supressão de rechecagens é redução de telemetria/calls, não evidência de avanço de dependências ou melhora de publicação.** Uma espera mais longa também pode diminuir a frequência da urgência e a chance de despachar chunks prontos.
+
+**B. Retenção de LOAD parcialmente concluído.** Em cold, foram preservados em média **2,83** estágios/execução (B) ou **3,0** (A+B), porém **zero** estágios marcados como `dm21_retained` foram publicados integralmente em **todos os cenários**. Cancelamentos LOAD no percurso cold: controle **17**, B **16,33** (diferença não relevante); chunks concluídos em estágios cancelados: controle **44,17**, B **35,67**. Esses contadores não autorizam afirmar reaproveitamento efetivo: podem variar com interleaving e avanço da janela. No longo, cancelamentos LOAD foram **31** em todos os braços, retenção B ~1 sem conclusão. O custo de conservar esses estágios pode competir com foco canônico/visual em vez de melhorá-los.
+
+**DM18 + HIGH.** `warm-outback`: todos os braços registraram **51 cache hits DM18** por execução, sem perda demonstrada de reutilização. `idle`: todos concluíram exatamente **268 HIGH visuais**, em média 12,942s (controle), 13,165s (A), 13,153s (B), 13,167s (A+B). Diferença descritiva de +~0,21–0,23s, mas IC95% largo com apenas 2 pares; não comprova regressão nem equivalência. Idle p99 igual a 16,667ms em todos os braços por limite de 60FPS.
+
+### Veredito final: DM21_A_B_NO_PROVEN_PERFORMANCE_GAIN
+
+1. **DM21-A e DM21-B devem permanecer OFF por padrão.** Não fazer merge de nenhum dos dois na `main`; não há ganho de cobertura canônica estatisticamente reproduzível e o tail de frame após pré-aquecimento merece cautela.
+2. **Preservar o DM18**, validado visualmente pelo usuário, sem alteração em residência/revisão/effects; branch experimental isolado.
+3. **Não confundir consumer-side dedup com single-flight novo.** O single-flight de geração/projeção já existia; DM21-A apenas adicionou sinais de prontidão ao consumidor.
+4. **Próxima investigação** mais justificada: atribuição *por scope* dos eventos `queued → generation-inflight → projection-inflight → published`, custo por fase, prioridade de scopes requisitados por região focal, latência até todos os 25 scopes exigidos para uma primeira submissão, e número de scopes que são reusados entre chamadas. Avaliar detecção de indisponibilidade exata por scope antes de gerar snapshots e política de publicação mais cedo, sem ampliar o pool ou remover validação de edits/efeitos.
+5. **Retenção alternativa só após medir janela temporal de retorno**, integridade de stage e orçamento de slots. DM21-B não mostrou publicações reaproveitadas; não expandir janela canônica com base no baixo uso de RAM sem medir custo CPU e revalidação.
+6. No futuro, exigir teste longo de movimento contínuo em regiões virgens, seeds adicionais, replay determinístico e equivalência GPU/objetos/colisão/editar/undo. Os testes headless atuais não validam visualmente nem demonstram causalidade suficiente para promoção.
+
+`main` permanece inalterada. Evidência [GitHub Actions DM21](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43586067986). Status da campanha **COMPLETED_PASS**; veredito técnico **NO_PROVEN_GAIN**.
