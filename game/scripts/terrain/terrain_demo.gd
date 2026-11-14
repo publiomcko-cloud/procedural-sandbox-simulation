@@ -25,6 +25,8 @@ const EnvironmentHydrologyDomainScript := preload("res://scripts/simulation/envi
 const EnvironmentSurfaceCacheJobScript := preload("res://scripts/simulation/environment_surface_cache_job.gd")
 const DM16BenchmarkProbe := preload("res://scripts/diagnostics/dm16_benchmark_probe.gd")
 const DM19ColdAttribution := preload("res://scripts/diagnostics/dm19_cold_attribution.gd")
+const DM21EffectWaitGate := preload("res://scripts/terrain/dm21_effect_wait_gate.gd")
+const DM21StageRetention := preload("res://scripts/terrain/dm21_stage_retention.gd")
 const DM18CanonicalCache := preload("res://scripts/terrain/dm18_canonical_region_cache.gd")
 const DM12SnapshotBatch := preload("res://scripts/terrain/dm12_surface_snapshot_batch.gd")
 const EnvironmentVisualScript := preload("res://scripts/simulation/environment_visual_presentation.gd")
@@ -279,6 +281,20 @@ var _dm18_job_times: Dictionary = {
 }
 # DM19: profiling only, allocated exclusively for benchmark when explicitly enabled.
 var _dm19_cold_profile: RefCounted
+# DM21 independent opt-in experiments; DM18 cache stays unmodified.
+var _dm21_effect_gate := false
+var _dm21_stage_retention := false
+var _dm21_gate_registered := 0
+var _dm21_gate_suppressed := 0
+var _dm21_gate_notifications := 0
+var _dm21_gate_watchdogs := 0
+var _dm21_gate_rejections := 0
+var _dm21_retained_stages := 0
+var _dm21_retained_completed := 0
+var _dm21_cancelled_stages := 0
+var _dm21_cancelled_submitted_chunks := 0
+var _dm21_cancelled_completed_chunks := 0
+var _dm21_cancelled_pending_jobs := 0
 
 var _dm12_surface_slice := false
 var _dm14_lazy_route_enabled := false
@@ -434,6 +450,8 @@ var _last_edit_rejection := ""
 
 func _ready() -> void:
 	_perf_trace_enabled = PerformanceTrace.is_enabled()
+	_dm21_effect_gate = OS.get_environment("SANDBOX_DM21_EFFECT_GATE") == "1"
+	_dm21_stage_retention = OS.get_environment("SANDBOX_DM21_RETAIN_PARTIAL_STAGES") == "1"
 	if OS.get_environment("SANDBOX_DM19_COLD_DIAGNOSTIC") == "1" \
 	and OS.get_environment("SANDBOX_STREAM_BENCHMARK") == "1":
 		_dm19_cold_profile = DM19ColdAttribution.new()
@@ -2275,6 +2293,21 @@ func _process_free_exploration(delta: float) -> void:
 					"dm18_cache_enabled": _dm18_cache_enabled,
 					"dm18_diagnostic_enabled": _dm18_diagnostic_enabled,
 					"dm19_cold_diagnostic_enabled": _dm19_cold_profile != null,
+					"dm21_effect_gate": _dm21_effect_gate,
+					"dm21_stage_retention": _dm21_stage_retention,
+					"dm21": {
+						"gate_registered": _dm21_gate_registered,
+						"gate_suppressed": _dm21_gate_suppressed,
+						"gate_notifications": _dm21_gate_notifications,
+						"gate_watchdogs": _dm21_gate_watchdogs,
+						"gate_rejections": _dm21_gate_rejections,
+						"retained_stages": _dm21_retained_stages,
+						"retained_completed": _dm21_retained_completed,
+						"cancelled_load_stages": _dm21_cancelled_stages,
+						"cancelled_submitted_chunks": _dm21_cancelled_submitted_chunks,
+						"cancelled_completed_chunks": _dm21_cancelled_completed_chunks,
+						"cancelled_pending_jobs": _dm21_cancelled_pending_jobs
+					},
 					"dm19_cold": _dm19_cold_profile.summary() if _dm19_cold_profile != null else {},
 					"dm19_effect_runtime": terrain_effect_runtime.get_performance_snapshot() if _dm19_cold_profile != null and terrain_effect_runtime != null and bool(terrain_effect_runtime.get("initialized")) else {},
 					"dm18_cache": _dm18_cache.stats() if _dm18_cache_enabled else {},
@@ -2616,11 +2649,27 @@ func _reconcile_region_window(force: bool = false) -> void:
 	if global_rebuild_pending:
 		_ensure_full_rebuild_targets(desired, retained_ids)
 	else:
+		var dm21_kept_this_window := 0
 		for id_value in loading_regions.keys().duplicate():
 			var id: String = id_value
 			var stage: Dictionary = loading_regions[id]
 			var key: Vector2i = stage["region_key"]
-			if not retained_ids.has(id) or (stage["purpose"] == "load" and not _contains_region(desired, key)):
+			var inside_desired := _contains_region(desired, key)
+			if not retained_ids.has(id) or (stage["purpose"] == "load" and not inside_desired):
+				if _dm21_stage_retention and DM21StageRetention.eligible(
+					stage, retained_ids.has(id), inside_desired, dm21_kept_this_window
+				):
+					dm21_kept_this_window += 1
+					if not bool(stage.get("dm21_retained", false)):
+						stage["dm21_retained"] = true
+						loading_regions[id] = stage
+						_dm21_retained_stages += 1
+					continue
+				if String(stage.get("purpose", "")) == "load":
+					_dm21_cancelled_stages += 1
+					_dm21_cancelled_submitted_chunks += int(stage.get("submit_index", 0))
+					_dm21_cancelled_completed_chunks += int(stage.get("next_index", 0))
+					_dm21_cancelled_pending_jobs += int(stage.get("pending_count", 0))
 				if bool(stage.get("dm9_speculative", false)):
 					_dm9_stages_discarded += 1
 					_dm9_trace_stage("discard", stage)
@@ -4037,6 +4086,65 @@ func _process_completed_mesh_jobs() -> void:
 			_complete_region_stage(id)
 
 
+## A pending stage already registered its missing sources in EffectRuntime.
+## Wait for a source-published notification instead of regenerating snapshots
+## or re-enqueuing the same scopes on every rendered frame.
+func _dm21_should_hold_stage(stage: Dictionary, coordinate: Vector2i) -> bool:
+	if not _dm21_effect_gate:
+		return false
+	var waiting: Dictionary = stage.get("dm21_waiting", {})
+	if waiting.is_empty():
+		return false
+	var state: RefCounted = stage["world_state"]
+	var current_effect := int(object_stream.get_command_world_revision())
+	if not DM21EffectWaitGate.still_same_request(
+		waiting, stage, coordinate, int(state.brush_edits.revision),
+		int(state.brush_edits.get_instance_id()), current_effect
+	):
+		stage.erase("dm21_waiting")
+		_dm21_gate_rejections += 1
+		return false
+	var now_usec := Time.get_ticks_usec()
+	var generation := int(terrain_effect_runtime.dm21_readiness_generation())
+	if DM21EffectWaitGate.should_wait_without_event(waiting, generation, now_usec):
+		_dm21_gate_suppressed += 1
+		return true
+	if generation != int(waiting.get("generation", -1)):
+		_dm21_gate_notifications += 1
+		waiting["generation"] = generation
+		if DM21EffectWaitGate.should_wait_after_event(
+			waiting,
+			bool(terrain_effect_runtime.dm21_missing_regions_ready(
+				waiting.get("missing_regions", [])
+			)),
+			now_usec
+		):
+			stage["dm21_waiting"] = waiting
+			_dm21_gate_suppressed += 1
+			return true
+	if now_usec >= int(waiting.get("retry_after_usec", 0)):
+		_dm21_gate_watchdogs += 1
+	stage.erase("dm21_waiting")
+	return false
+
+
+func _dm21_register_pending(stage: Dictionary,
+		coordinate: Vector2i, result: Dictionary) -> void:
+	if not _dm21_effect_gate or String(stage.get("purpose", "")) != "load" \
+	or not bool(result.get("pending", false)):
+		return
+	var missing: Array = result.get("missing_source_regions", [])
+	if missing.is_empty():
+		return
+	var state: RefCounted = stage["world_state"]
+	stage["dm21_waiting"] = DM21EffectWaitGate.register(
+		stage, coordinate, missing,
+		int(terrain_effect_runtime.dm21_readiness_generation()),
+		Time.get_ticks_usec(), int(state.brush_edits.get_instance_id())
+	)
+	_dm21_gate_registered += 1
+
+
 func _dispatch_mesh_jobs() -> void:
 	var dispatch_started_usec := Time.get_ticks_usec()
 	# A blocked LOAD stage may be skipped for this invocation only. The
@@ -4075,6 +4183,22 @@ func _dispatch_mesh_jobs() -> void:
 			_fail_region_stage(id, "Injected mesh-stage failure; prior meshes retained")
 			continue
 		var coordinate: Vector2i = request["coordinate"]
+		if _dm21_should_hold_stage(stage, coordinate):
+			_stream_dispatch_blocked("dm21_effect_gate_waiting")
+			if StreamDispatchSelector.can_skip_pending(
+				_stream_profile, String(stage["purpose"]),
+				skipped_ids.size(), Time.get_ticks_usec() - dispatch_started_usec,
+				MESH_SNAPSHOT_FRAME_BUDGET_USEC,
+				_last_frame_ms < StreamBudgetPolicy.SPIKE_FRAME_MS
+				and _last_process_work_ms < StreamBudgetPolicy.SPIKE_PROCESS_MS
+				and String(_stream_budget_state.get("reason", "baseline"))
+					not in ["frame_spike", "cooldown"]
+			):
+				skipped_ids[id] = true
+				_stream_window_skipped_load_stages += 1
+				continue
+			_stream_dispatch_blocked("effect_skip_not_allowed_or_budget")
+			return
 		var queue_index: int = int(stage["submit_index"])
 		var enqueued_usec := int(stage["chunk_queued_usec"][queue_index])
 		var submitted_usec := Time.get_ticks_usec()
@@ -4101,6 +4225,7 @@ func _dispatch_mesh_jobs() -> void:
 			)
 			if not prepared_corner.get("ok", false):
 				if _terrain_effect_snapshot_pending(prepared_corner):
+					_dm21_register_pending(stage, coordinate, prepared_corner)
 					_stream_dispatch_blocked("effect_pending_corner")
 					if StreamDispatchSelector.can_skip_pending(
 						_stream_profile, String(stage["purpose"]),
@@ -4140,6 +4265,7 @@ func _dispatch_mesh_jobs() -> void:
 			)
 			if not prepared_pair.get("ok", false):
 				if _terrain_effect_snapshot_pending(prepared_pair):
+					_dm21_register_pending(stage, coordinate, prepared_pair)
 					_stream_dispatch_blocked("effect_pending_x_boundary")
 					if StreamDispatchSelector.can_skip_pending(
 						_stream_profile, String(stage["purpose"]),
@@ -4179,6 +4305,7 @@ func _dispatch_mesh_jobs() -> void:
 			)
 			if not prepared_z.get("ok", false):
 				if _terrain_effect_snapshot_pending(prepared_z):
+					_dm21_register_pending(stage, coordinate, prepared_z)
 					_stream_dispatch_blocked("effect_pending_z_boundary")
 					if StreamDispatchSelector.can_skip_pending(
 						_stream_profile, String(stage["purpose"]),
@@ -4213,6 +4340,7 @@ func _dispatch_mesh_jobs() -> void:
 			)
 			if not prepared_chunk.get("ok", false):
 				if _terrain_effect_snapshot_pending(prepared_chunk):
+					_dm21_register_pending(stage, coordinate, prepared_chunk)
 					_stream_dispatch_blocked("effect_pending_chunk")
 					if StreamDispatchSelector.can_skip_pending(
 						_stream_profile, String(stage["purpose"]),
@@ -4273,6 +4401,7 @@ func _dispatch_mesh_jobs() -> void:
 		if task_id < 0:
 			_fail_region_stage(id, "Worker pool rejected a mesh job; previous visible meshes retained")
 			continue
+		stage.erase("dm21_waiting")
 		stage["submit_index"] = int(stage["submit_index"]) + 1
 		stage["pending_count"] = int(stage["pending_count"]) + 1
 		loading_regions[id] = stage
@@ -4414,6 +4543,9 @@ func _complete_region_stage(id: String) -> void:
 		_try_commit_edit_transaction()
 		return
 	loading_regions.erase(id)
+	if _dm21_stage_retention and bool(stage.get("dm21_retained", false)) \
+	and String(stage.get("purpose", "")) == "load":
+		_dm21_retained_completed += 1
 	if _dm18_diagnostic_enabled and String(stage["purpose"]) == "load":
 		var wall_usec := maxi(0, Time.get_ticks_usec() - int(stage.get("chunk_enqueued_usec", 0)))
 		if bool(stage.get("dm18_cache_ready", false)):
