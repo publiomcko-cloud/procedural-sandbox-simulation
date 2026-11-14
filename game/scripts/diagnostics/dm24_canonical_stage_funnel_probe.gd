@@ -20,6 +20,7 @@ var _dm25_frame_selected_protected := false
 var _dm25_frame_budget := false
 var _dm25_frame_worker := false
 var _dm25_missing_source_hits: Dictionary = {}
+var _dm26_sources: Dictionary = {}
 
 
 static func key(id: String, token: int) -> String:
@@ -175,6 +176,45 @@ func effect_pending(id: String, token: int,
 			_dm25_missing_source_hits[scope] = int(_dm25_missing_source_hits.get(scope, 0)) + 1
 
 
+## Called only for the pending first-chunk snapshot of a tracked focal stage.
+## Full observer cost is identical in both A/A arms. No scheduling effects.
+func dm26_observe_sources(id: String, token: int, states: Array) -> void:
+	var focal_key := key(id, token)
+	if not _active.has(focal_key) or focal_key != _dm25_focus_key:
+		return
+	for value in states:
+		if not value is Dictionary:
+			continue
+		var record: Dictionary = value
+		var scope_id := String(record.get("id", ""))
+		if scope_id.is_empty():
+			continue
+		var state := String(record.get("state", "unknown"))
+		_inc("dm26_state_" + state)
+		var source: Dictionary = _dm26_sources.get(scope_id, {
+			"states": {}, "transitions": 0, "last_state": "",
+			"last_queue_index": -1, "last_protected": false,
+			"last_tracked": false, "last_queue_length": 0,
+			"prefetch_errors": 0
+		})
+		var counts: Dictionary = source["states"]
+		counts[state] = int(counts.get(state, 0)) + 1
+		if not String(source["last_state"]).is_empty() \
+		and String(source["last_state"]) != state:
+			source["transitions"] = int(source["transitions"]) + 1
+		source["last_state"] = state
+		source["last_queue_index"] = int(record.get("queued_index", -1))
+		source["last_protected"] = bool(record.get("protected", false))
+		source["last_tracked"] = bool(record.get("tracked", false))
+		source["last_queue_length"] = int(record.get("queue_length", 0))
+		if bool(record.get("prefetch_error", false)):
+			source["prefetch_errors"] = int(source["prefetch_errors"]) + 1
+		if not _dm26_sources.has(scope_id) and _dm26_sources.size() >= 128:
+			_inc("dm26_overflow")
+			continue
+		_dm26_sources[scope_id] = source
+
+
 func first_dispatched(id: String, token: int, now_usec: int) -> void:
 	var k := key(id, token)
 	if not _active.has(k):
@@ -263,6 +303,7 @@ func reset_measurements_preserving_active() -> void:
 	_counts.clear()
 	_samples.clear()
 	_dm25_missing_source_hits.clear()
+	_dm26_sources.clear()
 
 
 func summary() -> Dictionary:
@@ -285,7 +326,8 @@ func summary() -> Dictionary:
 		}
 	return {"counts": _counts.duplicate(), "latency": stats,
 		"active_stages": _active.size(),
-		"dm25_missing_source_hits": _dm25_missing_source_hits.duplicate()}
+		"dm25_missing_source_hits": _dm25_missing_source_hits.duplicate(),
+		"dm26_source_states": _dm26_sources.duplicate(true)}
 
 
 func _inc(name: String) -> void:
