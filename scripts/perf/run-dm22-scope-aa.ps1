@@ -101,8 +101,11 @@ try {
             [int]$s.dm18_cache.estimated_bytes -gt 134217728){
             throw "DM22_INCOMPLETE_SCOPE_LIFECYCLE $trial"
         }
-        if($route -ne 'idle' -and [int]$d.counts.focus_first_chunk_submitted -lt 1){
-            throw "DM22_MISSING_FIRST_FOCUS_CHUNK_LINKAGE $trial"
+        # After stationary prewarm, the first focal region may already be
+        # fully resident: zero new first-chunk dispatches is a valid result.
+        if($warm -eq 0 -and $route -ne 'idle' -and
+            [int]$d.counts.focus_first_chunk_submitted -lt 1){
+            throw "DM22_MISSING_COLD_FIRST_FOCUS_CHUNK_LINKAGE $trial"
         }
         $record=[pscustomobject][ordered]@{
             trial=$trial;scenario=$name;pair=$p;arm=$arm;sha=$sha;frames=$frames;warmup=$warm
