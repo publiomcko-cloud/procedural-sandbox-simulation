@@ -26,6 +26,7 @@ const EnvironmentSurfaceCacheJobScript := preload("res://scripts/simulation/envi
 const DM16BenchmarkProbe := preload("res://scripts/diagnostics/dm16_benchmark_probe.gd")
 const DM19ColdAttribution := preload("res://scripts/diagnostics/dm19_cold_attribution.gd")
 const DM20FocusPriority := preload("res://scripts/terrain/dm20_canonical_focus_priority.gd")
+const DM20SnapshotGuard := preload("res://scripts/terrain/dm20_snapshot_guard.gd")
 const DM18CanonicalCache := preload("res://scripts/terrain/dm18_canonical_region_cache.gd")
 const DM12SnapshotBatch := preload("res://scripts/terrain/dm12_surface_snapshot_batch.gd")
 const EnvironmentVisualScript := preload("res://scripts/simulation/environment_visual_presentation.gd")
@@ -4419,22 +4420,15 @@ func _dm20_consume_primed_snapshot(stage: Dictionary,
 	var primed: Dictionary = stage.get("dm20_primed", {})
 	if primed.is_empty():
 		return {}
-	if primed.get("coordinate") != coordinate \
-	or int(primed.get("token", -1)) != int(stage["stage_token"]) \
-	or int(primed.get("brush_revision", -1)) != int(state.brush_edits.revision) \
-	or int(primed.get("brush_scope_id", -1)) != int(state.brush_edits.get_instance_id()) \
-	or int(primed.get("effect_revision", -1)) \
-		!= int(object_stream.get_command_world_revision()):
-		_dm20_prime_rejected += 1
-		return {}
-	var snapshot: Dictionary = primed.get("snapshot", {})
-	if snapshot.is_empty() \
-	or int(snapshot.get("terrain_effect_authority_revision", -1)) \
-		!= int(stage["terrain_effect_authority_revision"]):
+	if not DM20SnapshotGuard.valid(
+		primed, stage, coordinate, int(state.brush_edits.get_instance_id()),
+		int(state.brush_edits.revision),
+		int(object_stream.get_command_world_revision())
+	):
 		_dm20_prime_rejected += 1
 		return {}
 	_dm20_prime_hits += 1
-	return snapshot
+	return primed["snapshot"]
 
 
 func _prepare_terrain_effect_snapshot(
