@@ -52,7 +52,7 @@ jobs:
         run: |
           foreach($case in @(
             @{file='res://tests/experiments/dm25_focal_stall_contract.gd';receipt='DM25_CAUSE_CONTRACT_PASS'},
-            @{file='res://tests/experiments/dm24_canonical_stage_funnel_contract.gd';receipt='DM25_STAGE_CONTRACT_PASS'},
+            @{file='res://tests/experiments/dm24_canonical_stage_funnel_contract.gd';receipt='DM24_STAGE_CONTRACT_PASS'},
             @{file='res://tests/experiments/dm23_region_fair_queue_contract.gd';receipt='DM23_CONTRACT_PASS'},
             @{file='res://tests/experiments/dm22_scope_lifecycle_contract.gd';receipt='DM22_SCOPE_PROBE_PASS'},
             @{file='res://tests/experiments/dm19_cold_attribution_contract.gd';receipt='DM19_COLD_PROFILE_PASS'},
@@ -64,7 +64,7 @@ jobs:
             $out=& $env:GODOT_BIN --headless --path .\game --script $case.file 2>&1 | Out-String
             Write-Host $out
             if($LASTEXITCODE -ne 0 -or -not $out.Contains($case.receipt) -or
-               $out -match 'SCRIPT ERROR:|Parse Error:|DM25_STAGE_CONTRACT_FAIL:|DM23_CONTRACT_FAILURE:|DM22_SCOPE_PROBE_FAILURE:'){
+               $out -match 'SCRIPT ERROR:|Parse Error:|DM24_STAGE_CONTRACT_FAIL:|DM23_CONTRACT_FAILURE:|DM22_SCOPE_PROBE_FAILURE:'){
               throw "DM25_EXACT_FAILED $($case.file)"
             }
           }
