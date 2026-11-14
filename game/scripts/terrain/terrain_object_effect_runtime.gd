@@ -55,6 +55,8 @@ var _projection_build_cache_order: Array[String] = []
 var _projection_source_cache: Dictionary = {}
 var _projection_source_cache_order: Array[String] = []
 var _prefetch_error := ""
+# DM22 observer: same instrumentation, allocation and overhead in every arm.
+var _dm22_probe: RefCounted
 var _perf_trace_enabled := false
 # DM14 hotspot diagnostics, separate from the normal performance summary.
 var _dm14_effect_trace := false
@@ -166,6 +168,10 @@ func initialize(
 			"incremental_prefetch": incremental_prefetch_enabled,
 		})
 	return {"ok": true, "reason": "ok"}
+
+
+func set_dm22_probe(probe: RefCounted) -> void:
+	_dm22_probe = probe
 
 
 func set_incremental_prefetch_enabled(enabled: bool) -> void:
@@ -398,6 +404,8 @@ func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
 				region, authority_revision
 			)
 		if not cached_source_record.is_empty():
+			if _dm22_probe != null:
+				_dm22_probe.source_cache_hit(scope_id, Time.get_ticks_usec())
 			var cached_source: Dictionary = cached_source_record.get(
 				"source", {}
 			)
@@ -459,6 +467,8 @@ func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
 				int(_performance["prefetch_peak_usec"]), scope_usec
 			)
 			processed += 1
+			if _dm22_probe != null:
+				_dm22_probe.published(scope_id, Time.get_ticks_usec(), scope_usec)
 			if processed >= maxi(max_scopes, 0):
 				break
 			continue
@@ -485,6 +495,8 @@ func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
 			"submitted_usec": Time.get_ticks_usec(),
 		}
 		_prefetch_task_by_scope[scope_id] = task_id
+		if _dm22_probe != null:
+			_dm22_probe.generation_dispatched(scope_id, Time.get_ticks_usec())
 		_performance["prefetch_worker_dispatch_count"] = int(
 			_performance["prefetch_worker_dispatch_count"]
 		) + 1
@@ -1025,10 +1037,16 @@ func _enqueue_prefetch_regions(
 					if _prefetch_queue[index] == region:
 						_prefetch_queue.remove_at(index)
 						to_add.append(region)
+						if _dm22_probe != null:
+							_dm22_probe.reprioritized(scope_id)
 						break
 			continue
 		_prefetch_scope_ids[scope_id] = true
 		to_add.append(region)
+		if _dm22_probe != null:
+			_dm22_probe.queued(
+				scope_id, Time.get_ticks_usec(), _prefetch_queue.size(), high_priority
+			)
 	if high_priority:
 		for index in range(to_add.size() - 1, -1, -1):
 			_prefetch_queue.push_front(to_add[index])
@@ -1052,6 +1070,11 @@ func _filter_prefetch_to_protected() -> void:
 		if _protected_scope_ids.has(scope_id):
 			kept.append(region)
 			kept_ids[scope_id] = true
+	if _dm22_probe != null:
+		for old_region in _prefetch_queue:
+			var old_scope := Contract.scope_id_for_region(old_region)
+			if not kept_ids.has(old_scope):
+				_dm22_probe.cancelled(old_scope, "left_protected_queue")
 	_prefetch_queue = kept
 	for jobs in [_prefetch_generation_jobs, _prefetch_projection_jobs]:
 		for task_id_value in jobs:
@@ -1164,6 +1187,7 @@ func prepare_targets_snapshot(
 			"pending": true,
 			"reason": "terrain_effect_runtime_prefetch_pending",
 			"missing_scope_count": missing_regions.size(),
+			"missing_source_regions": missing_regions.duplicate() if _dm22_probe != null else [],
 			"prefetch_pending_count": _prefetch_queue.size(),
 		}
 	for source_region in missing_regions:
