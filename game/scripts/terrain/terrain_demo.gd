@@ -26,6 +26,7 @@ const EnvironmentSurfaceCacheJobScript := preload("res://scripts/simulation/envi
 const DM16BenchmarkProbe := preload("res://scripts/diagnostics/dm16_benchmark_probe.gd")
 const DM19ColdAttribution := preload("res://scripts/diagnostics/dm19_cold_attribution.gd")
 const DM22ScopeLifecycleProbe := preload("res://scripts/diagnostics/dm22_scope_lifecycle_probe.gd")
+const DM23RegionLifecycleProbe := preload("res://scripts/diagnostics/dm23_region_lifecycle_probe.gd")
 const DM18CanonicalCache := preload("res://scripts/terrain/dm18_canonical_region_cache.gd")
 const DM12SnapshotBatch := preload("res://scripts/terrain/dm12_surface_snapshot_batch.gd")
 const EnvironmentVisualScript := preload("res://scripts/simulation/environment_visual_presentation.gd")
@@ -282,6 +283,8 @@ var _dm18_job_times: Dictionary = {
 var _dm19_cold_profile: RefCounted
 # DM22 is ALWAYS enabled in both benchmark arms. No treatment-specific trace.
 var _dm22_probe: RefCounted
+var _dm23_stage_probe: RefCounted
+var _dm23_previous_focus := Vector2i(2147483647, 2147483647)
 var _dm22_in_mesh_dispatch := false
 var _dm22_snapshot_context: Dictionary = {}
 
@@ -442,6 +445,9 @@ func _ready() -> void:
 	if OS.get_environment("SANDBOX_DM22_SCOPE_TRACE") == "1" \
 	and OS.get_environment("SANDBOX_STREAM_BENCHMARK") == "1":
 		_dm22_probe = DM22ScopeLifecycleProbe.new()
+		if OS.get_environment("SANDBOX_DM23_STAGE_TRACE") == "1":
+			_dm23_stage_probe = DM23RegionLifecycleProbe.new()
+			_dm22_probe.set_dm23_stage_probe(_dm23_stage_probe)
 	if OS.get_environment("SANDBOX_DM19_COLD_DIAGNOSTIC") == "1" \
 	and OS.get_environment("SANDBOX_STREAM_BENCHMARK") == "1":
 		_dm19_cold_profile = DM19ColdAttribution.new()
@@ -2218,10 +2224,14 @@ func _process_free_exploration(delta: float) -> void:
 			if _stream_bench_warmup_remaining == 0:
 				if _dm22_probe != null:
 					_dm22_probe.reset_measurements()
+					if _dm23_stage_probe != null:
+						_dm23_stage_probe.reset_counters_preserving_active()
 					_dm19_cold_profile = DM19ColdAttribution.new()
 					if terrain_effect_runtime != null \
 					and bool(terrain_effect_runtime.get("initialized")):
 						terrain_effect_runtime.reset_performance_metrics()
+						if _dm23_stage_probe != null:
+							terrain_effect_runtime.dm23_reset_metrics()
 				print("DM5_BENCH_WARMUP_COMPLETE: " + JSON.stringify({
 					"frames": _stream_bench_warmup_frames,
 					"focus": [focus_region_key.x, focus_region_key.y],
@@ -2293,6 +2303,9 @@ func _process_free_exploration(delta: float) -> void:
 					"dm19_cold_diagnostic_enabled": _dm19_cold_profile != null,
 					"dm22_scope_trace_enabled": _dm22_probe != null,
 					"dm22_scope_trace": _dm22_probe.summary() if _dm22_probe != null else {},
+					"dm23_stage_trace_enabled": _dm23_stage_probe != null,
+					"dm23_region_trace": _dm23_stage_probe.summary() if _dm23_stage_probe != null else {},
+					"dm23_fair_source_queue": terrain_effect_runtime.dm23_fair_metrics() if terrain_effect_runtime != null and bool(terrain_effect_runtime.get("initialized")) else {},
 					"dm19_cold": _dm19_cold_profile.summary() if _dm19_cold_profile != null else {},
 					"dm19_effect_runtime": terrain_effect_runtime.get_performance_snapshot() if _dm19_cold_profile != null and terrain_effect_runtime != null and bool(terrain_effect_runtime.get("initialized")) else {},
 					"dm18_cache": _dm18_cache.stats() if _dm18_cache_enabled else {},
@@ -2512,6 +2525,13 @@ func _update_focus_key() -> void:
 	var mapped: Dictionary = SpatialGrid.world_to_region_local(orbit_target)
 	if mapped.get("valid", false):
 		focus_region_key = mapped["region_key"]
+		if _dm23_stage_probe != null and focus_region_key != _dm23_previous_focus:
+			var focus_id := _region_id(focus_region_key)
+			var focus_stage: Dictionary = loading_regions.get(focus_id, {})
+			_dm23_stage_probe.focus_enter(
+				focus_id, int(focus_stage.get("stage_token", -1)), Time.get_ticks_usec()
+			)
+			_dm23_previous_focus = focus_region_key
 		world_state = _state_for_region(focus_region_key)
 		if (
 			is_instance_valid(simulation_runtime)
@@ -2645,6 +2665,10 @@ func _reconcile_region_window(force: bool = false) -> void:
 				_discard_progressive_chunks(id, "left_window")
 				if _dm22_probe != null and String(stage.get("purpose", "")) == "load":
 					_dm22_probe.focus_cancel(id, int(stage.get("stage_token", -1)))
+				if _dm23_stage_probe != null and String(stage.get("purpose", "")) == "load":
+					_dm23_stage_probe.cancelled(
+						id, int(stage.get("stage_token", -1)), "left_window"
+					)
 				if _dm19_cold_profile != null:
 					_dm19_cold_profile.cancel(id, "left_window")
 				loading_regions.erase(id)
@@ -2954,6 +2978,11 @@ func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinate
 			bool(loading_regions[id].get("dm18_cache_ready", false)),
 			maxi(absi(region_key.x - focus_region_key.x),
 				absi(region_key.y - focus_region_key.y))
+		)
+	if _dm23_stage_probe != null and purpose == "load" and not dm9_speculative:
+		_dm23_stage_probe.begin(
+			id, token, Time.get_ticks_usec(), region_key == focus_region_key,
+			bool(loading_regions[id].get("dm18_cache_ready", false))
 		)
 	if region_key == focus_region_key:
 		world_state = state
@@ -4100,6 +4129,9 @@ func _dispatch_mesh_jobs() -> void:
 		var coordinate: Vector2i = request["coordinate"]
 		if _dm22_in_mesh_dispatch:
 			_dm22_snapshot_context = {
+				"first_load": String(stage.get("purpose", "")) == "load"
+					and int(stage.get("submit_index", 0)) == 0
+					and not bool(stage.get("dm9_speculative", false)),
 				"first_focus": String(stage.get("purpose", "")) == "load"
 					and int(stage.get("submit_index", 0)) == 0
 					and stage.get("region_key") == focus_region_key
@@ -4309,6 +4341,11 @@ func _dispatch_mesh_jobs() -> void:
 				String(_dm22_snapshot_context["id"]),
 				int(_dm22_snapshot_context["token"]), Time.get_ticks_usec()
 			)
+		if _dm23_stage_probe != null \
+		and bool(_dm22_snapshot_context.get("first_load", false)):
+			_dm23_stage_probe.first_submitted(
+				id, int(stage["stage_token"]), Time.get_ticks_usec()
+			)
 		stage["submit_index"] = int(stage["submit_index"]) + 1
 		stage["pending_count"] = int(stage["pending_count"]) + 1
 		loading_regions[id] = stage
@@ -4368,6 +4405,14 @@ func _prepare_terrain_effect_snapshot(
 	if _dm22_in_mesh_dispatch and _dm22_probe != null \
 	and bool(_dm22_snapshot_context.get("first_focus", false)):
 		_dm22_probe.focus_prepare(
+			String(_dm22_snapshot_context["id"]),
+			int(_dm22_snapshot_context["token"]), Time.get_ticks_usec(),
+			prepared.get("missing_source_regions", []),
+			bool(prepared.get("pending", false))
+		)
+	if _dm23_stage_probe != null and _dm22_in_mesh_dispatch \
+	and bool(_dm22_snapshot_context.get("first_load", false)):
+		_dm23_stage_probe.first_prepare(
 			String(_dm22_snapshot_context["id"]),
 			int(_dm22_snapshot_context["token"]), Time.get_ticks_usec(),
 			prepared.get("missing_source_regions", []),
@@ -4482,6 +4527,10 @@ func _complete_region_stage(id: String) -> void:
 		)
 		if _dm19_cold_profile != null and String(stage["purpose"]) == "load":
 			_dm19_cold_profile.published(id, Time.get_ticks_usec())
+		if _dm23_stage_probe != null and String(stage["purpose"]) == "load":
+			_dm23_stage_probe.published(
+				id, int(stage["stage_token"]), Time.get_ticks_usec()
+			)
 		if _perf_trace_enabled:
 			PerformanceTrace.emit("terrain_region_load_complete", {
 				"region": [(stage["region_key"] as Vector2i).x, (stage["region_key"] as Vector2i).y],
@@ -5918,6 +5967,10 @@ func _supersede_region_stage(id: String) -> void:
 	var stale_stage: Dictionary = loading_regions[id]
 	if _dm22_probe != null and String(stale_stage.get("purpose", "")) == "load":
 		_dm22_probe.focus_cancel(id, int(stale_stage.get("stage_token", -1)))
+	if _dm23_stage_probe != null and String(stale_stage.get("purpose", "")) == "load":
+		_dm23_stage_probe.cancelled(
+			id, int(stale_stage.get("stage_token", -1)), "superseded"
+		)
 	if _dm19_cold_profile != null:
 		_dm19_cold_profile.cancel(id, "superseded")
 	loading_regions.erase(id)
@@ -5971,6 +6024,10 @@ func _fail_region_stage(id: String, message: String) -> void:
 	_clear_coarse_preview(id, "stage_failed")
 	_record_stream_error(id, message)
 	var failed_stage: Dictionary = loading_regions.get(id, {})
+	if _dm23_stage_probe != null and String(failed_stage.get("purpose", "")) == "load":
+		_dm23_stage_probe.cancelled(
+			id, int(failed_stage.get("stage_token", -1)), "failed"
+		)
 	if _dm19_cold_profile != null:
 		_dm19_cold_profile.cancel(id, "failed")
 	loading_regions.erase(id)
