@@ -234,6 +234,12 @@ func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
 				"worker_usec",
 				int(job.get("worker_finished_usec")) - int(job.get("worker_started_usec"))
 			))
+			if _dm22_probe != null:
+				_dm22_probe.projection_completed(
+					String(record["scope_id"]), Time.get_ticks_usec(),
+					maxi(0, int(job.get("worker_started_usec")) -
+						int(record.get("submitted_usec", 0))), worker_usec
+				)
 			_performance["prefetch_projection_worker_complete_count"] = int(
 				_performance["prefetch_projection_worker_complete_count"]
 			) + 1
@@ -281,6 +287,8 @@ func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
 						and not _protected_scope_ids.has(scope_id)
 				):
 				_prefetch_scope_ids.erase(scope_id)
+				if _dm22_probe != null:
+					_dm22_probe.cancelled(scope_id, "generation_discarded")
 			else:
 				var job: RefCounted = record["job"]
 				var generated: Dictionary = job.get("result")
@@ -322,6 +330,15 @@ func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
 				if not source.get("ok", false):
 					_prefetch_error = "terrain_effect_runtime_source_failed:%s" 						% source.get("reason", "unknown")
 					return _failure(_prefetch_error)
+				if _dm22_probe != null:
+					_dm22_probe.generation_completed(
+						scope_id,
+						int(record.get("submitted_usec", source_started_usec)),
+						Time.get_ticks_usec(),
+						maxi(0, int(job.get("worker_started_usec")) -
+							int(record.get("submitted_usec", source_started_usec))),
+						worker_usec, source_usec
+					)
 				var projection_queue := _queue_projection_build(
 					region, scope_id, source
 				)
@@ -555,6 +572,8 @@ func _publish_prebuilt_projection_record(
 		not _protected_scope_ids.is_empty()
 		and not _protected_scope_ids.has(scope_id)
 	):
+		if _dm22_probe != null:
+			_dm22_probe.cancelled(scope_id, "projection_discarded")
 		return {"ok": true, "processed": 0}
 	if not prebuilt.get("ok", false):
 		return _failure(
@@ -598,6 +617,8 @@ func _publish_prebuilt_projection_record(
 	_performance["prefetch_projection_publish_total_usec"] = int(
 		_performance["prefetch_projection_publish_total_usec"]
 	) + publish_usec
+	if _dm22_probe != null:
+		_dm22_probe.published(scope_id, Time.get_ticks_usec(), publish_usec)
 	_performance["prefetch_projection_publish_peak_usec"] = maxi(
 		int(_performance["prefetch_projection_publish_peak_usec"]),
 		publish_usec
@@ -674,6 +695,8 @@ func _queue_projection_build(
 			_performance["projection_build_cache_reused_effect_count"] = int(
 				_performance["projection_build_cache_reused_effect_count"]
 			) + int((rebased.get("effects", {}) as Dictionary).size())
+			if _dm22_probe != null:
+				_dm22_probe.projection_dispatched(scope_id, Time.get_ticks_usec(), true)
 			_prefetch_projection_ready.append({
 				"region": region,
 				"scope_id": scope_id,
@@ -731,6 +754,8 @@ func _queue_projection_build(
 		"submitted_usec": Time.get_ticks_usec(),
 	}
 	_prefetch_projection_task_by_scope[scope_id] = build_task_id
+	if _dm22_probe != null:
+		_dm22_probe.projection_dispatched(scope_id, Time.get_ticks_usec(), false)
 	_performance["prefetch_projection_worker_dispatch_count"] = int(
 		_performance["prefetch_projection_worker_dispatch_count"]
 	) + 1
