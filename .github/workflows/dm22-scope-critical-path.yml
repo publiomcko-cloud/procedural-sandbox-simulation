@@ -46,7 +46,7 @@ jobs:
         shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
         run: |
           foreach($case in @(
-            @{file='res://tests/experiments/dm22_scope_lifecycle_contract.gd';receipt='DM22_CONTRACT_PASS'},
+            @{file='res://tests/experiments/dm22_scope_lifecycle_contract.gd';receipt='DM22_SCOPE_PROBE_PASS'},
             @{file='res://tests/experiments/dm19_cold_attribution_contract.gd';receipt='DM19_COLD_PROFILE_PASS'},
             @{file='res://tests/experiments/dm18_canonical_cache_contract.gd';receipt='DM18_CANONICAL_CACHE_PASS'},
             @{file='res://tests/experiments/dm17_sparse_lattice_contract.gd';receipt='DM17_SPARSE_LATTICE_PASS'},
